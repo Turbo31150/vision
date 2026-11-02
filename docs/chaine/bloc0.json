@@ -1,89 +1,19 @@
 {
-  "ancrage_registre_usage": {
-    "entrees": 11871,
-    "registre": "usage",
-    "tete": "a5d854ccc45fd4710ba26498ed154517d845a70eaeaacfaff65d39dbd520fc81"
-  },
-  "chaine": "turbo-jeton",
-  "empreinte": "e5ef70671ea77ffe452dcdc9670ca498cfd86ffd06404dccc7c9d0783e922267",
-  "empreinte_precedente": "0000000000000000000000000000000000000000000000000000000000000000",
-  "frappe_le": "2026-11-02T06:40:34.842868+00:00",
-  "frappe_unique": true,
-  "gele": false,
-  "hauteur": 0,
-  "largage": {
-    "anti_abus": "un seul compte par client facturé ; les parts d'un compte révoqué sont gelées, jamais transférées ; chaque attribution est inscrite au registre chaîné",
-    "assiette": "5 % de l'offre, soit 5 000 000 unités",
-    "cessibilite": "non cessible avant l'ouverture de la phase 2 ; jusque-là, utilisable seulement pour payer des unités, un abonnement ou un pack",
-    "comment": "réclamation nominative par le jeton d'identité tc_ du compte, sur une route de la passerelle ; une réclamation par compte facturé",
-    "fenetre": "24 mois à compter du gel du bloc 0",
-    "part_par_compte": "parts égales entre les ayants droit constatés à la date du gel, plafonnées à 0,1 % de l'offre par compte",
-    "qui": "comptes ayant payé au moins une facture, et contributeurs dont l'apport a été vérifié par une règle déterministe (correctif appliqué et test rejoué, fiche admise au portail de souveraineté, question de test qui a fait échouer une réponse)",
-    "qui_non": "aucune attribution contre une inscription, un partage, un abonnement à un réseau social, une adresse fournie sans facture ni apport vérifié"
-  },
-  "note": "Bloc 0 de la chaîne du jeton Turbo OS. Il scelle des paramètres, il n'émet rien. Décision du propriétaire du 02/11/2026, qui renverse la ligne « ni blockchain ni jeton » posée plus tôt le même jour.",
-  "offre_au_public": false,
-  "offre_totale": 100000000,
-  "regles": [
-    "Aucune frappe supplémentaire : aucune fonction d'émission au-delà de l'offre totale.",
-    "Rien n'est offert au public tant que les cinq conditions de CONFORMITE-MICA.md § 4 ne sont pas réunies et prouvées.",
-    "Aucune promesse de gain, de prix, de rachat ni de rendement.",
-    "20 % des unités dépensées en unités de service sont détruites : l'offre en circulation décroît avec l'usage réel.",
-    "Le propriétaire garde l'arrêt d'urgence ; une majorité de détenteurs ne renverse pas un test de sécurité échoué.",
-    "Aucune clé privée ni graine ne figure dans un fichier partagé, un corpus, une conversation ou une invite.",
-    "La répartition interne de la part de l'équipe n'est pas gravée ici : elle demande la signature des intéressés."
-  ],
-  "repartition": [
-    {
-      "categorie": "usage",
-      "liberation": "époques hebdomadaires sur 4 ans, montant décroissant ; une époque n'émet que ce que l'usage mesuré de la semaine justifie",
-      "part": "Récompenses d'usage (apports vérifiés, conversion des crédits internes)",
-      "pourcentage": 35,
-      "unites": 35000000
-    },
-    {
-      "categorie": "largage",
-      "liberation": "réclamable pendant 24 mois à compter du gel du bloc 0 ; non réclamé, le solde retourne aux récompenses d'usage",
-      "part": "Largage initial nominatif (premiers clients payants et contributeurs vérifiés)",
-      "pourcentage": 5,
-      "unites": 5000000
-    },
-    {
-      "categorie": "tresorerie",
-      "liberation": "blocage de 12 mois à compter du gel, puis 1/36 par mois ; chaque dépense publiée",
-      "part": "Trésorerie de développement",
-      "pourcentage": 20,
-      "unites": 20000000
-    },
-    {
-      "categorie": "equipe",
-      "liberation": "blocage de 12 mois à compter du gel, puis 1/36 par mois sur 36 mois ; répartition interne entre les personnes à signer par les intéressés, hors de ce bloc",
-      "part": "Équipe fondatrice",
-      "pourcentage": 15,
-      "unites": 15000000
-    },
-    {
-      "categorie": "distribution",
-      "liberation": "contre résultats mesurés (ventes encaissées), blocage de 6 mois par tranche attribuée",
-      "part": "Partenaires de distribution",
-      "pourcentage": 10,
-      "unites": 10000000
-    },
-    {
-      "categorie": "liquidite",
-      "liberation": "immobilisée jusqu'à une admission sur une plateforme agréée ; aucune admission n'est engagée ni datée",
-      "part": "Liquidité",
-      "pourcentage": 10,
-      "unites": 10000000
-    },
-    {
-      "categorie": "reserve",
-      "liberation": "sur décision publiée, pour indemniser un incident imputable au système",
-      "part": "Réserve de conformité et d'incidents",
-      "pourcentage": 5,
-      "unites": 5000000
-    }
-  ],
-  "unite": "TURBO",
-  "version_format": "turbo-jeton-bloc0/1"
+ "chaine": "vision-essai",
+ "version": 1,
+ "essai": true,
+ "offert_au_public": false,
+ "offre_totale": 35000000,
+ "repartition": [
+  {
+   "categorie": "usage",
+   "unites": 35000000,
+   "part": "Récompenses d'usage, sur travail vérifié",
+   "liberation": "époques hebdomadaires sur 4 ans, montant décroissant"
+  }
+ ],
+ "note": "Réseau d'essai : unités sans valeur, non cessibles, ni vendues ni offertes.",
+ "frappe_le": "2026-11-02T15:12:10Z",
+ "empreinte_precedente": "0000000000000000000000000000000000000000000000000000000000000000",
+ "empreinte": "0f777921fe8377009c7f69515713e111c2f527ec7cff32844f1ca5c2249bb046"
 }

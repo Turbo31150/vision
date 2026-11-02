@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Installateur du nœud VISION (réseau d'essai, chaîne TURBO-essai) et de son portefeuille de bureau.
+# Installateur du nœud VISION (réseau d'essai, chaîne VISION-essai) et de son portefeuille de bureau.
 # Tout s'installe dans l'espace de l'utilisateur, sans sudo. Unités d'essai sans valeur ; rien n'est vendu.
 #
-#   bash installer-noeud-turbo-essai.sh [--nom NOM] [--pair URL]... [--miroir URL]... [--api 127.0.0.1:PORT] [--p2p ADRESSE:PORT]
+#   bash installer-noeud-vision.sh [--nom NOM] [--pair URL]... [--miroir URL]... [--api 127.0.0.1:PORT] [--p2p ADRESSE:PORT]
 #                                       [--prefixe DOSSIER] [--sans-systemd] [--sans-bureau]
 #                                       [--p2p-public http://IP:PORT] [--cockpit URL]   (adresse annoncée aux pairs)
-#   bash installer-noeud-turbo-essai.sh --role producteur --chaine D --bloc0 F --cle-producteur K [--vision D]
-#   bash installer-noeud-turbo-essai.sh --desinstaller [--prefixe DOSSIER]     (les clés du portefeuille restent)
+#   bash installer-noeud-vision.sh --role producteur --chaine D --bloc0 F --cle-producteur K [--vision D]
+#   bash installer-noeud-vision.sh --desinstaller [--prefixe DOSSIER]     (les clés du portefeuille restent)
 #
 # Construit le @@DATE@@ · bloc 0 épinglé @@BLOC0@@ · producteur @@PRODUCTEUR_COURT@@
 set -euo pipefail
@@ -17,7 +17,7 @@ MIROIR_DEFAUT='@@MIROIR@@'
 DEPOT='@@DEPOT@@'
 MIROIRS=()
 ROLE=pair; NOM=$(hostname -s | tr 'A-Z' 'a-z' | tr -c 'a-z0-9-\n' '-' | cut -c1-30); PAIRS=()
-API=127.0.0.1:8861; P2P=127.0.0.1:8862; PREFIXE="$HOME/.local/share/turbo-noeud"
+API=127.0.0.1:8861; P2P=127.0.0.1:8862; PREFIXE="$HOME/.local/share/vision-noeud"
 P2P_PUBLIC=""; COCKPIT=""; SYSTEMD=1; BUREAU=1; CHAINE=""; BLOC0=""; CLE_PROD=""; VISION=/nonexistent; DESINSTALLER=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,13 +31,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 dire() { printf '\033[1;36m▸\033[0m %s\n' "$*"; }
-UNITE="turbo-noeud-$(basename "$PREFIXE" | tr -c 'a-z0-9-\n' '-').service"
-[ "$PREFIXE" = "$HOME/.local/share/turbo-noeud" ] && UNITE=turbo-noeud.service
+UNITE="vision-noeud-$(basename "$PREFIXE" | tr -c 'a-z0-9-\n' '-').service"
+[ "$PREFIXE" = "$HOME/.local/share/vision-noeud" ] && UNITE=vision-noeud.service
 
 if [ "$DESINSTALLER" = 1 ]; then
   systemctl --user disable --now "$UNITE" 2>/dev/null || true
   [ -f "$PREFIXE/noeud.pid" ] && kill "$(cat "$PREFIXE/noeud.pid")" 2>/dev/null || true
-  rm -f "$HOME/.config/systemd/user/$UNITE" "$HOME/.local/share/applications/turbo-portefeuille.desktop"
+  rm -f "$HOME/.config/systemd/user/$UNITE" "$HOME/.local/share/applications/vision-portefeuille.desktop"
   rm -rf "$PREFIXE/code"
   systemctl --user daemon-reload 2>/dev/null || true
   dire "nœud arrêté et retiré ; clés et chaîne conservées dans $PREFIXE (portefeuille/ = votre clé, à garder)"
@@ -62,9 +62,9 @@ dire "installation du nœud « $NOM » ($ROLE) dans $PREFIXE"
 umask 077
 mkdir -p "$PREFIXE"/{code,cles,portefeuille,chaine}
 sed -n '/^__CHARGE__$/,$p' "$0" | tail -n +2 | base64 -d | tar -xz -C "$PREFIXE/code"
-chmod 755 "$PREFIXE/code/turbo-noeud" "$PREFIXE/code/jeton-chaine" "$PREFIXE/code/ouvrir-portefeuille"
-[ -f "$PREFIXE/cles/noeud_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "turbo-noeud-$NOM" -f "$PREFIXE/cles/noeud_ed25519"
-[ -f "$PREFIXE/portefeuille/portefeuille_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "turbo-portefeuille-$NOM" -f "$PREFIXE/portefeuille/portefeuille_ed25519"
+chmod 755 "$PREFIXE/code/vision-noeud" "$PREFIXE/code/vision-chaine" "$PREFIXE/code/ouvrir-portefeuille"
+[ -f "$PREFIXE/cles/noeud_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "vision-noeud-$NOM" -f "$PREFIXE/cles/noeud_ed25519"
+[ -f "$PREFIXE/portefeuille/portefeuille_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "vision-portefeuille-$NOM" -f "$PREFIXE/portefeuille/portefeuille_ed25519"
 
 python3 - "$PREFIXE/config.json" <<PY
 import json, sys
@@ -73,21 +73,17 @@ cfg = {"nom": "$NOM", "role": role, "api": "$API", "p2p": "$P2P",
        "pairs": [p for p in """${PAIRS[*]:-}""".split() if p],
        "miroirs": [m for m in """${MIROIRS[*]:-}""".split() if m], "depot": "$DEPOT" or None,
        "bloc0_empreinte": "$BLOC0_EMPREINTE", "producteur_pub": "$PRODUCTEUR_PUB",
-       "outil_chaine": "$PREFIXE/code/jeton-chaine", "ui": "$PREFIXE/code/ui",
+       "outil_chaine": "$PREFIXE/code/vision-chaine", "ui": "$PREFIXE/code/ui",
        "cle_noeud": "$PREFIXE/cles/noeud_ed25519", "portefeuille": "$PREFIXE/portefeuille/portefeuille_ed25519",
        "chaine": "${CHAINE:-$PREFIXE/chaine}", "vision": "$VISION", "cadence_s": 5,
        "p2p_public": "$P2P_PUBLIC" or None, "cockpit": "$COCKPIT" or None,
-       "services": [
-         {"id": "mission-sauvegardes", "titre": "Mission vérifiée : contrôle des sauvegardes", "prix": 120, "noeud": "m6"},
-         {"id": "inference-1k", "titre": "Inférence locale, 1 000 jetons (qwen2.5-7b)", "prix": 4, "noeud": "m0"},
-         {"id": "vision-image", "titre": "Lecture d'image par le modèle de vision", "prix": 15, "noeud": "m6"},
-         {"id": "audit-parc", "titre": "Mission d'audit vérifiée par deux machines", "prix": 60, "noeud": "m1"}]}
+       "services": []}
 if role == "producteur":
     cfg.update(bloc0="$BLOC0", cle_producteur="$CLE_PROD")
 json.dump(cfg, open(sys.argv[1], "w"), ensure_ascii=False, indent=1)
 PY
 
-LANCE="/usr/bin/env python3 -B $PREFIXE/code/turbo-noeud --config $PREFIXE/config.json"
+LANCE="/usr/bin/env python3 -B $PREFIXE/code/vision-noeud --config $PREFIXE/config.json"
 if [ "$SYSTEMD" = 1 ] && systemctl --user show-environment >/dev/null 2>&1; then
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/$UNITE" <<UNIT
@@ -116,7 +112,7 @@ fi
 
 if [ "$BUREAU" = 1 ]; then
   mkdir -p "$HOME/.local/share/applications"
-  cat > "$HOME/.local/share/applications/turbo-portefeuille.desktop" <<DESK
+  cat > "$HOME/.local/share/applications/vision-portefeuille.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=VISION Portefeuille
@@ -126,7 +122,7 @@ Icon=$PREFIXE/code/ui/icone.svg
 Terminal=false
 Categories=Finance;Network;
 DESK
-  chmod 755 "$HOME/.local/share/applications/turbo-portefeuille.desktop"
+  chmod 755 "$HOME/.local/share/applications/vision-portefeuille.desktop"
   dire "icône « VISION Portefeuille » ajoutée au menu des applications"
 fi
 

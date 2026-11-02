@@ -24,7 +24,7 @@
 </header>
 
 <main>
-  <div class="bandeau-essai">Chaîne d'ESSAI : unités sans valeur, rien n'est vendu ni offert au public. Achat réel fermé tant que le bloc 0 n'est pas gelé.</div>
+  <div class="bandeau-essai">Chaîne d'ESSAI : unités sans valeur, rien n'est vendu ni offert au public. Aucun achat réel.</div>
 
   <section id="vue-apercu" class="vue actif">
     <div class="grille-kpi" id="kpis"></div>
@@ -32,8 +32,8 @@
       <div class="carte">
         <h2>Comment circule une unité</h2>
         <ol class="circuit">
-          <li><b>Forfait</b> : payé en euros uniquement, il crédite des unités d’usage non cessibles, prises sur la réserve « usage » (essai : aucune somme encaissée).</li>
-          <li><b>Utilisation</b> : chaque demande servie par l’assistant du cockpit coûte 1 unité (8 pour une table ronde, 0 pour l’état).</li>
+          <li><b>Forfait d'essai</b> : des unités d'usage non cessibles, créditées par des factures d'essai ; aucune somme n'est encaissée.</li>
+          <li><b>Utilisation</b> : un service rendu par le réseau se règle par une dépense signée.</li>
           <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve qui paie les époques.</li>
           <li><b>Partage de puissance</b> : à chaque fin d'époque (mercredi 12:00 UTC), le budget de la semaine est partagé au prorata des points : travail validé par un reçu indépendant (secondes de calcul × 2 si rejeu exact) et validations signées. Le budget est divisé par deux chaque année, sur 4 ans.</li>
           <li><b>Aucun transfert</b> entre comptes, aucune frappe : l'offre ne fait que décroître.</li>
@@ -49,7 +49,7 @@
   <section id="vue-portefeuille" class="vue">
     <div class="carte solde-carte">
       <div class="solde-libelle">Solde</div>
-      <div class="solde"><span id="solde">—</span> <small>TURBO-essai</small></div>
+      <div class="solde"><span id="solde">—</span> <small>VISION-essai</small></div>
       <div class="adresse-ligne"><code id="adresse">—</code><button class="petit" id="copier">Copier</button></div>
       <div class="actions">
         <button class="primaire" id="btn-depenser">Dépenser</button>
@@ -91,7 +91,7 @@
     <div id="compte" hidden>
       <div class="grille-kpi" id="kpis-compte"></div>
       <div class="deux">
-        <div class="carte"><h2>Abonnement et forfaits</h2><div id="compte-forfaits"></div></div>
+        <div class="carte"><h2>Forfaits d'essai</h2><div id="compte-forfaits"></div></div>
         <div class="carte"><h2>Nœuds et matériel partagé</h2><div id="compte-noeuds"></div></div>
       </div>
       <div class="carte"><h2>Opérations sur la chaîne</h2><div id="compte-historique"></div></div>

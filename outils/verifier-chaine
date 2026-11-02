@@ -23,9 +23,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from math import ceil
 
-CHAINE, FORMAT = "turbo-jeton-essai", "turbo-jeton-bloc/1"
+CHAINE, FORMAT = "vision-essai", "vision-bloc/1"
 PRODUCTEUR = "m0"
-ESPACE_BLOC, ESPACE_TX, ESPACE_CLE = "turbo-jeton-bloc", "turbo-jeton-tx", "turbo-jeton-cle"
+ESPACE_BLOC, ESPACE_TX, ESPACE_CLE = "vision-bloc", "vision-tx", "vision-cle"
 RESERVE = "reserve:usage"
 EPOQUE_0 = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
 SEMAINE = timedelta(days=7)

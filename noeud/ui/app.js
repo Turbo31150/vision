@@ -1,4 +1,4 @@
-/* Turbo · Portefeuille — interface du nœud (servie par turbo-noeud sur 127.0.0.1). Texte toujours par textContent. */
+/* Turbo · Portefeuille — interface du nœud (servie par vision-noeud sur 127.0.0.1). Texte toujours par textContent. */
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -95,7 +95,7 @@
     $('adresse').textContent = p.adresse;
     $('fichier-cle').textContent = p.fichier_cle || '—';
     $('btn-acheter').disabled = !p.achat_possible;
-    $('btn-acheter').title = p.achat_possible ? 'Forfaits en euros convertis en unités (essai)' : 'Achat de forfait possible seulement sur le nœud producteur tant que la vente réelle est fermée';
+    $('btn-acheter').title = p.achat_possible ? 'Forfaits d’essai, aucune somme encaissée' : 'Achat de forfait possible seulement sur le nœud producteur tant que la vente réelle est fermée';
     vider($('attente'), p.en_attente.length ? tableau([['Type', (t) => t.type], ['Unités', (t) => t.unites ?? '', 'num'],
       ['Service', (t) => t.service || ''], ['Id', (t) => el('code', {}, court(t.id, 10))]], p.en_attente) : el('div', { class: 'vide' }, 'Rien en attente.'));
     vider($('historique'), tableau([['Bloc', (t) => `#${t.hauteur}`], ['Quand', (t) => heure(t.horodatage)], ['Type', (t) => TYPES[t.type] || t.type],
@@ -109,12 +109,12 @@
       el('span', { class: 'mono' }, `${g.memoire_mo} Mo · ${g.utilisation_pct} % · ${g.temperature} °C`)))
       : el('div', { class: 'vide' }, 'Aucune carte NVIDIA détectée sur cette machine.'));
     $('regle-puissance').textContent = `Règle : ${z.regle}.`;
-    $('solde-noeud').textContent = `${fr.format(z.solde_noeud)} TURBO-essai`;
+    $('solde-noeud').textContent = `${fr.format(z.solde_noeud)} VISION-essai`;
     const ORIGINE = { recompense: 'reçu de vérification (v1)', depense: 'dépense servie (v1)', epoque: 'fin d’époque' };
     vider($('gains'), tableau([['Bloc', (g) => `#${g.hauteur}`], ['Origine', (g) => ORIGINE[g.type] || g.type],
       ['Unités', (g) => `+${fr.format(g.unites)}`, 'num plus'], ['Détail', (g) => g.detail || ''], ['Voie', (g) => g.voie || '']], z.gains,
     'Pas encore de gain pour ce nœud.'));
-    vider($('classement'), tableau([['Nœud', (x) => x[0]], ['Unités gagnées', (x) => fr.format(x[1]), 'num']], z.classement, 'Aucun nœud rémunéré.'));
+    vider($('classement'), tableau([['Nœud', (x) => x[0]], ['Unités reçues', (x) => fr.format(x[1]), 'num']], z.classement, 'Aucun nœud rémunéré.'));
     rendreEpoque();
   }
 
@@ -141,6 +141,7 @@
 
   function formulaireDepense() {
     const p = donnees.portefeuille, f = $('formulaire');
+    if (!p.services.length) { vider(f, el('p', { class: 'note' }, 'Aucun service publié sur ce réseau d’essai.')); f.hidden = false; return; }
     const sel = el('select', {}, p.services.map((s, i) => el('option', { value: String(i) }, `${s.titre} — ${s.prix} unités (nœud ${s.noeud})`)));
     const barre = el('div', { class: 'repartition' }, el('div', { class: 'd' }), el('div', { class: 'n' }));
     const leg = el('div', { class: 'legende' });
@@ -180,7 +181,7 @@
         f.hidden = true; rafraichir();
       } catch (e) { message('message', `Refusé : ${e.message}`, false); } finally { ok.disabled = false; }
     } }, 'Acheter ce forfait (essai)');
-    vider(f, el('label', {}, 'Forfaits : paiement en euros uniquement, converti en unités d’usage non cessibles (prix proposés, non décidés)'),
+    vider(f, el('label', {}, 'Forfaits d’essai : aucune somme encaissée'),
       choix, el('div', { class: 'actions' }, ok, el('button', { onclick: () => { f.hidden = true; } }, 'Annuler')));
     f.hidden = false;
   }
@@ -209,7 +210,7 @@
       ['Hauteur', (n) => (n.hauteur ?? '—'), 'num'],
       ['GPU', (n) => (n.capacite ? n.capacite.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${Math.round(g.vram_mo / 1024)} Go · ${g.utilisation_pct} %`).join(' / ') || 'aucun' : '—')],
       ['CPU · RAM', (n) => (n.capacite ? `${n.capacite.cpu_coeurs} cœurs · ${Math.round((n.capacite.ram_mo || 0) / 1024)} Go · charge ${n.capacite.charge}` : '—')],
-      ['Gagné', (n) => fr.format((r.gains || {})[n.nom] || 0), 'num plus'],
+      ['Reçu', (n) => fr.format((r.gains || {})[n.nom] || 0), 'num plus'],
       ['Cockpit', (n) => (n.cockpit ? el('a', { href: n.cockpit, target: '_blank', rel: 'noopener' }, 'ouvrir') : '—')]], r.noeuds));
   }
 
@@ -228,17 +229,17 @@
     $('compte').hidden = false;
     if (!c.connu) message('message-compte', 'Adresse valide, mais encore inconnue de la chaîne : aucune opération, aucun nœud rattaché.', true);
     const ab = c.abonnement;
-    vider($('kpis-compte'), [['Solde', fr.format(c.solde), 'cyan'], ['Abonnement', ab ? `${ab.offre}` : 'aucun', ab ? 'vert' : ''],
+    vider($('kpis-compte'), [['Solde', fr.format(c.solde), 'cyan'], ['Forfait d’essai', ab ? `${ab.offre}` : 'aucun', ab ? 'vert' : ''],
       ['Unités dépensées', fr.format(c.depense), ''], ['Détruites par ses dépenses', fr.format(c.detruit_par_ses_depenses), 'rouge'],
-      ['Nœuds rattachés', c.noeuds.length, ''], ['Gagné par ses nœuds', fr.format(c.gains_total), 'vert']]
+      ['Nœuds rattachés', c.noeuds.length, ''], ['Reçu par ses nœuds', fr.format(c.gains_total), 'vert']]
       .map(([l, v, k]) => el('div', { class: `kpi ${k}` }, el('div', { class: 'val' }, String(v)), el('div', { class: 'lib' }, l))));
     vider($('compte-forfaits'), tableau([['Offre', (f) => f.offre], ['Unités', (f) => `+${fr.format(f.unites)}`, 'num plus'],
       ['Bloc', (f) => `#${f.hauteur}`], ['Quand', (f) => heure(f.horodatage)], ['Facture', (f) => el('code', {}, f.facture || '')]],
-    c.forfaits, 'Aucun forfait : les unités d’usage viennent d’un forfait payé en euros (fermé pendant l’essai).'));
+    c.forfaits, 'Aucun forfait : les unités d’usage viennent d’un forfait d’essai.'));
     vider($('compte-noeuds'), tableau([['Nœud', (n) => el('b', {}, n.noeud)],
       ['État', (n) => el('span', { class: `badge ${n.actif ? 'ok' : ''}` }, n.actif ? 'actif' : 'hors ligne ou hors de vue')],
       ['Matériel partagé', (n) => (n.materiel ? `${n.materiel.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${Math.round(g.vram_mo / 1024)} Go`).join(' / ') || 'sans GPU'} · ${n.materiel.cpu_coeurs} cœurs · ${Math.round((n.materiel.ram_mo || 0) / 1024)} Go` : '—')],
-      ['Gagné', (n) => fr.format(n.gains), 'num plus'], ['Inscrit au bloc', (n) => `#${n.hauteur}`], ['Lien', (n) => n.lien]],
+      ['Reçu', (n) => fr.format(n.gains), 'num plus'], ['Inscrit au bloc', (n) => `#${n.hauteur}`], ['Lien', (n) => n.lien]],
     c.noeuds, 'Aucun nœud rattaché à cette adresse.'));
     vider($('compte-historique'), tableau([['Bloc', (t) => `#${t.hauteur}`], ['Quand', (t) => heure(t.horodatage)], ['Type', (t) => TYPES[t.type] || t.type],
       ['Unités', (t) => el('span', { class: t.sens === '+' ? 'plus' : 'moins' }, `${t.sens}${fr.format(t.unites)}`)],

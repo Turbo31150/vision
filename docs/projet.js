@@ -9,7 +9,7 @@
   function parc(e) {
     const actifs = Object.fromEntries((e.reseau.noeuds || []).map((n) => [n.nom, n]));
     const t = el('table'); const th = el('thead'); const tr = el('tr');
-    ['Nœud', 'État', 'Matériel partagé', 'Gagné'].forEach((c) => tr.append(el('th', null, c)));
+    ['Nœud', 'État', 'Matériel partagé', 'Reçu'].forEach((c) => tr.append(el('th', null, c)));
     th.append(tr); t.append(th);
     const tb = el('tbody');
     for (const n of e.inscrits) {
@@ -22,7 +22,7 @@
       tb.append(l);
     }
     t.append(tb);
-    document.getElementById('parc').replaceChildren(t);
+    document.getElementById('parc').replaceChildren(e.inscrits.length ? t : el('p', 'vide', 'Aucun nœud inscrit pour l’instant.'));
   }
 
   fetch('chaine/etat.json', { cache: 'no-store' }).then((r) => r.json()).then((e) => {

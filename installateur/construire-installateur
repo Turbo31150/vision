@@ -11,7 +11,7 @@ INFO="$RACINE/docs/chaine/info.json"
 PUB=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['producteur_pub'])" "$INFO")
 B0=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['bloc0'])" "$INFO")
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-cp "$RACINE/noeud/turbo-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/chaine/jeton-chaine" "$T/"
+cp "$RACINE/noeud/vision-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/chaine/vision-chaine" "$T/"
 cp -r "$RACINE/noeud/ui" "$T/ui"
 SORTIE="$RACINE/docs/installer-noeud-vision.sh"
 # date fixe = celle du bloc de tête : deux constructions du même état donnent le même fichier

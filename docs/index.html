@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VISION · nœud, portefeuille et partage de puissance</title>
-<meta name="description" content="VISION, réseau d'essai de Turbo OS : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve.">
+<meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve.">
 <link rel="icon" href="icone.svg">
 <link rel="stylesheet" href="style.css">
 <script defer src="projet.js"></script>
@@ -83,17 +83,11 @@
 
   <h2>Le circuit d'une unité</h2>
   <ol class="circuit-unite">
-    <li><span class="n">1</span><b>Créditée</b><span>Dans la conception, par un forfait payé en euros et converti. Pendant l'essai : factures d'essai seulement, aucune somme encaissée.</span></li>
+    <li><span class="n">1</span><b>Créditée</b><span>Par des factures d'essai seulement : aucune somme n'est encaissée.</span></li>
     <li><span class="n">2</span><b>Dépensée</b><span>Une réponse d'un modèle, une lecture d'image : le portefeuille signe la dépense, le producteur la scelle dans un bloc.</span></li>
     <li><span class="n">3</span><b>Détruite à 20 %</b><span>Le reste retourne à la réserve d'usage. L'offre en circulation ne fait que décroître.</span></li>
     <li><span class="n">4</span><b>Rendue aux machines</b><span>À la clôture de l'époque (mercredi 12:00 UTC), la réserve récompense le travail vérifié et les vérifications signées.</span></li>
   </ol>
-
-  <h2>Le portefeuille, connecté par adresse</h2>
-  <div class="capture-bloc">
-    <figure class="capture"><img src="portefeuille-compte.png" width="1280" height="640" alt="Portefeuille VISION, onglet Mon compte : connexion avec l'adresse du nœud m6, solde, abonnement, unités dépensées et détruites, nœud rattaché avec son matériel partagé (GTX 1660 Super et Quadro RTX 4000) et 220 unités gagnées."></figure>
-    <p class="vide">Capture réelle du portefeuille, 2 novembre 2026 : connexion avec l'adresse du nœud m6. On y lit son matériel partagé et ce qu'il a gagné en revérifiant le travail des autres.</p>
-  </div>
 
   <h2>Le parc en ce moment</h2>
   <div class="carte"><div id="parc" class="table-boite"><p class="vide">Chargement…</p></div>
@@ -111,7 +105,7 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
     <li>Ouvrez le portefeuille : <code>http://127.0.0.1:8861/</code> (ou l'icône « VISION Portefeuille » du menu). Le nœud lit la chaîne sur ce site et la rejoue.</li>
     <li>Onglet <b>Nœud</b> → <b>Préparer ma demande d'inscription</b> : la transaction, signée par la clé de votre nœud, s'ouvre en ticket sur le dépôt. Elle ne contient que des données publiques. Le producteur l'importe ; votre nœud entre alors au registre, rattaché à votre portefeuille.</li>
   </ol>
-  <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code> (vos clés restent dans <code>~/.local/share/turbo-noeud</code>).</p>
+  <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code> (vos clés restent dans <code>~/.local/share/vision-noeud</code>).</p>
 
   <h2>Ce que VISION n'est pas</h2>
   <div class="grille trois">
@@ -125,7 +119,6 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
     <li><b class="fait">Fait</b> Chaîne d'essai signée, nœud, installateur en un fichier, portefeuille de bureau avec connexion par adresse, partage de puissance mesuré sur 3 machines et 6 GPU, règles de récompense par époque, explorateur public.</li>
     <li><b class="prochain">04/11</b> Première clôture d'époque, recalculée par chaque nœud.</li>
     <li><b class="prochain">Ensuite</b> Témoins tenus par d'autres propriétaires, chiffrement du transport entre nœuds, traversée des box (NAT), inscription des nœuds sans intervention manuelle.</li>
-    <li><b class="plus-tard">Plus tard</b> Gel du bloc 0 et usage réel, seulement quand les conditions réglementaires seront réunies et prouvées. D'ici là, rien n'est en vente.</li>
   </ul>
 
   <h2>Limites connues</h2>
@@ -133,6 +126,6 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
     <p>Un seul producteur de blocs (preuve d'autorité). Aucun audit externe à ce jour. Le transport entre nœuds n'est pas chiffré (les blocs, eux, sont signés). Compter des secondes de calcul reste une mesure approchée de la valeur du travail. Les critiques sont bienvenues : ouvrez un ticket sur le dépôt.</p>
   </div>
 </main>
-<footer>VISION · réseau d'essai de Turbo OS · code et données publiés sur <a href="https://github.com/Turbo31150/vision">github.com/Turbo31150/vision</a></footer>
+<footer>VISION · réseau d'essai · code et données publiés sur <a href="https://github.com/Turbo31150/vision">github.com/Turbo31150/vision</a></footer>
 </body>
 </html>

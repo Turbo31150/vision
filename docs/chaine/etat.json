@@ -1,109 +1,28 @@
 {
- "genere_le": "2026-11-02T15:16:00Z",
- "hauteur": 14,
- "transactions": 32,
+ "genere_le": "2026-11-02T15:24:00Z",
+ "hauteur": 2,
+ "transactions": 2,
  "soldes": {
-  "reserve:usage": 34977174,
-  "reserve:largage": 5000000,
-  "reserve:tresorerie": 20000000,
-  "reserve:equipe": 15000000,
-  "reserve:distribution": 10000000,
-  "reserve:liquidite": 10000000,
-  "reserve:reserve": 5000000,
-  "detruit": 59,
-  "noeud:m0": 46,
-  "noeud:m6": 220,
-  "compte:demo-client": 340,
-  "compte:te10cab05ec85b24694a17dd394438b9b89d4c06db4": 21981,
-  "compte:te12016d959042039671bbe6390940d4eb20f0049ed": 180
+  "reserve:usage": 35000000,
+  "detruit": 0
  },
- "inscrits": [
-  {
-   "noeud": "m0",
-   "adresse": "te1efc4537842abfcfe6ca8c0ccd893629c2dea920f",
-   "portefeuille": null,
-   "hauteur": 4,
-   "horodatage": "2026-11-02T12:12:16Z"
-  },
-  {
-   "noeud": "utilisateur-essai",
-   "adresse": "te1da530c02b86715886241db243713d87e3bec890e",
-   "portefeuille": null,
-   "hauteur": 5,
-   "horodatage": "2026-11-02T12:12:39Z"
-  },
-  {
-   "noeud": "m1",
-   "adresse": "te14fecd8b2e89312ae56f4c62b74dbf47badacada4",
-   "portefeuille": null,
-   "hauteur": 9,
-   "horodatage": "2026-11-02T12:32:22Z"
-  },
-  {
-   "noeud": "m6",
-   "adresse": "te1f68fe6dc1c2e699f5ee7979c64687d9ecd70ea19",
-   "portefeuille": null,
-   "hauteur": 10,
-   "horodatage": "2026-11-02T12:35:40Z"
-  }
- ],
+ "inscrits": [],
  "reseau": {
   "total": {
-   "noeuds_actifs": 2,
-   "noeuds_connus": 2,
-   "machines": 2,
-   "gpus": 4,
-   "vram_go": 36.0,
-   "vram_libre_go": 4.5,
-   "gpu_utilisation_pct": 1,
-   "cpu_coeurs": 20,
-   "ram_go": 78.3,
-   "hauteur": 14,
-   "synchronises": 2,
-   "inscrits": 4
+   "noeuds_actifs": 0,
+   "noeuds_connus": 0,
+   "machines": 0,
+   "gpus": 0,
+   "vram_go": 0,
+   "vram_libre_go": 0,
+   "gpu_utilisation_pct": 0,
+   "cpu_coeurs": 0,
+   "ram_go": 0,
+   "hauteur": 2,
+   "synchronises": 0,
+   "inscrits": 0
   },
-  "noeuds": [
-   {
-    "nom": "m0",
-    "role": "producteur",
-    "actif": true,
-    "hauteur": 14,
-    "materiel": {
-     "gpus": [
-      {
-       "nom": "NVIDIA GeForce RTX 2060",
-       "vram_mo": 12288
-      },
-      {
-       "nom": "NVIDIA GeForce RTX 3080",
-       "vram_mo": 10240
-      }
-     ],
-     "cpu_coeurs": 16,
-     "ram_mo": 48089
-    }
-   },
-   {
-    "nom": "m6",
-    "role": "pair",
-    "actif": true,
-    "hauteur": 14,
-    "materiel": {
-     "gpus": [
-      {
-       "nom": "NVIDIA GeForce GTX 1660 SUPER",
-       "vram_mo": 6144
-      },
-      {
-       "nom": "Quadro RTX 4000",
-       "vram_mo": 8192
-      }
-     ],
-     "cpu_coeurs": 4,
-     "ram_mo": 32051
-    }
-   }
-  ]
+  "noeuds": []
  },
  "epoque": {
   "courante": {
@@ -112,19 +31,11 @@
    "fin": "2026-11-04T12:00:00Z",
    "budget": 358974,
    "regles_v2": true,
-   "justifie": 59,
-   "emis_projete": 59,
-   "scores": {
-    "m0": 12,
-    "m1": 24,
-    "m6": 23
-   },
-   "attributions_projetees": {
-    "m0": 12,
-    "m1": 24,
-    "m6": 23
-   },
-   "contributions": 53
+   "justifie": null,
+   "emis_projete": null,
+   "scores": null,
+   "attributions_projetees": null,
+   "contributions": null
   },
   "closes": [],
   "calendrier": {

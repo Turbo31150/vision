@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""exporter-chaine-publique — écrit le miroir public de la chaîne d'essai TURBO-essai (site statique).
+"""exporter-chaine-publique — écrit le miroir public de la chaîne d'essai VISION-essai (site statique).
 
 Sorties dans DOSSIER (par défaut docs/chaine du dépôt) :
   info.json   réseau, empreinte du bloc 0, hauteur, tête, clé publique d'origine du producteur
@@ -9,7 +9,7 @@ Sorties dans DOSSIER (par défaut docs/chaine du dépôt) :
               époque en cours et époques closes, pour l'explorateur
 
 Ne contient ni clé privée, ni adresse IP, ni chemin de fichier : un contrôle final refuse l'écriture sinon.
-  exporter-chaine-publique [--config ~/.local/share/turbo-noeud/config.json] [--api 127.0.0.1:8861] [DOSSIER]
+  exporter-chaine-publique [--config ~/.local/share/vision-noeud/config.json] [--api 127.0.0.1:8861] [DOSSIER]
 """
 import argparse
 import importlib.machinery
@@ -28,13 +28,13 @@ INTERDIT = re.compile(r"PRIVATE KE[Y]|/hom[e]/|/mn[t]/|/roo[t]/|\b(10|127|19[2]\
 
 
 def charger_chaine(cfg):
-    os.environ.update({"JETON_CHAINE": os.path.expanduser(cfg["chaine"]),
-                       "JETON_BLOC0": os.path.expanduser(cfg.get("bloc0") or str(Path(cfg["chaine"]) / "bloc0.json")),
-                       "JETON_CLE": os.path.expanduser(cfg.get("cle_producteur") or str(Path(cfg["chaine"]) / "producteur")),
-                       "JETON_VISION": "/nonexistent"})
+    os.environ.update({"VISION_CHAINE": os.path.expanduser(cfg["chaine"]),
+                       "VISION_BLOC0": os.path.expanduser(cfg.get("bloc0") or str(Path(cfg["chaine"]) / "bloc0.json")),
+                       "VISION_CLE": os.path.expanduser(cfg.get("cle_producteur") or str(Path(cfg["chaine"]) / "producteur")),
+                       "VISION_JOURNAL": "/nonexistent"})
     outil = os.path.expanduser(cfg["outil_chaine"])
-    ch = importlib.machinery.SourceFileLoader("jeton_chaine", outil)
-    spec = importlib.util.spec_from_loader("jeton_chaine", ch)
+    ch = importlib.machinery.SourceFileLoader("vision_chaine", outil)
+    spec = importlib.util.spec_from_loader("vision_chaine", ch)
     j = importlib.util.module_from_spec(spec)
     ch.exec_module(j)
     return j
@@ -47,7 +47,7 @@ def api(base, chemin):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--config", default="~/.local/share/turbo-noeud/config.json")
+    ap.add_argument("--config", default="~/.local/share/vision-noeud/config.json")
     ap.add_argument("--api", default="127.0.0.1:8861")
     ap.add_argument("dossier", nargs="?", default=str(Path(__file__).resolve().parent.parent / "docs" / "chaine"))
     a = ap.parse_args()
@@ -56,7 +56,7 @@ def main():
     bloc0, blocs, soldes, _ = J.etat_courant()
     if not blocs:
         sys.exit("chaîne vide : rien à exporter")
-    b0_brut = Path(os.environ["JETON_BLOC0"]).read_text()
+    b0_brut = Path(os.environ["VISION_BLOC0"]).read_text()
     if json.loads(b0_brut)["empreinte"] != cfg["bloc0_empreinte"]:
         sys.exit("bloc 0 local différent de l'empreinte épinglée")
     J.rejouer(blocs, bloc0, cfg["producteur_pub"])          # on n'exporte que ce qui se rejoue
@@ -73,7 +73,7 @@ def main():
     inscrits = [{"noeud": tx["noeud"], "adresse": tx["adresse"], "portefeuille": tx.get("portefeuille"), "hauteur": b["hauteur"],
                  "horodatage": tx.get("horodatage")}
                 for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
-    info = {"reseau": "turbo-jeton-essai", "essai": True, "bloc0": cfg["bloc0_empreinte"], "hauteur": len(blocs),
+    info = {"reseau": "vision-essai", "essai": True, "bloc0": cfg["bloc0_empreinte"], "hauteur": len(blocs),
             "tete": blocs[-1]["empreinte"], "producteur_pub": cfg["producteur_pub"], "genere_le": maintenant,
             "note": "Chaîne d'essai : unités sans valeur, non cessibles ; rien n'est vendu ni offert au public."}
     etat = {"genere_le": maintenant, "hauteur": len(blocs), "transactions": sum(len(b["transactions"]) for b in blocs),

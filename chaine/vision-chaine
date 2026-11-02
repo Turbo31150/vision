@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""jeton-chaine — chaîne de blocs D'ESSAI du jeton Turbo OS (TURBO-essai), posée sur le bloc 0 de `jeton-genese`.
+"""vision-chaine — chaîne de blocs D'ESSAI du réseau VISION (VISION-essai), posée sur son bloc 0.
 
-Une chaîne à autorité (m0 produit, les témoins M1 et M6 cosignent) qui déroule les règles du bloc 0 :
-  * bloc 1 = genèse d'essai : les 100 000 000 unités du bloc 0 sont réparties dans ses 7 réserves ;
-  * seule la réserve « usage » circule tant que le bloc 0 n'est pas gelé ; les six autres restent bloquées ;
-  * achat     : crédits internes payés en euros, convertis en unités prises sur la réserve usage
-                (bloc 0 : « conversion des crédits internes ») ; en essai, la facture doit commencer par ESSAI- ;
+Une chaîne à autorité (un producteur signe, des témoins peuvent cosigner) qui déroule les règles du bloc 0 :
+  * bloc 1 = genèse d'essai : les unités du bloc 0 sont placées dans sa réserve d'usage ;
+  * seule la réserve « usage » circule ;
+  * achat     : achat d'essai pris sur la réserve usage ; la facture commence par ESSAI-, aucune somme n'est encaissée ;
   * dépense   : un compte paie un service ; 20 % des unités sont détruites (règle du bloc 0), 80 % vont au nœud
                 qui a fait le calcul, ou retournent à la réserve usage si aucun nœud n'est nommé ;
   * récompense: partage de puissance ; une étape de mission VISION exécutée par une machine et validée par un
@@ -13,25 +12,25 @@ Une chaîne à autorité (m0 produit, les témoins M1 et M6 cosignent) qui déro
   * aucune frappe, aucun transfert entre comptes, aucun retrait vers l'extérieur.
 
 Chaque bloc : hauteur, empreinte du précédent (le bloc 0 pour le bloc 1), racine de Merkle des transactions,
-empreinte des soldes après le bloc, signature ssh-keygen (espace `turbo-jeton-bloc`). `verifier` rejoue tout depuis
-le bloc 0 : liens, racines, signatures, règles, conservation de l'offre (soldes + détruit = 100 000 000).
+empreinte des soldes après le bloc, signature ssh-keygen (espace `vision-bloc`). `verifier` rejoue tout depuis
+le bloc 0 : liens, racines, signatures, règles, conservation de l'offre (soldes + détruit = offre totale).
 Un témoin (`cosigner`) rejoue la même vérification sur sa copie avec la clé du producteur qu'il a épinglée, puis signe
-la tête avec SA clé (espace `turbo-jeton-cosignature`) ; sa clé privée ne quitte pas sa machine.
+la tête avec SA clé (espace `vision-cosignature`) ; sa clé privée ne quitte pas sa machine.
 
-ESSAI : unités sans valeur, rien n'est vendu ni offert au public ; voir CONFORMITE-MICA.md (5 conditions).
+ESSAI : unités sans valeur, rien n'est vendu ni offert au public.
 
-  jeton-chaine init                         genèse d'essai (bloc 1), une seule fois
-  jeton-chaine acheter  --compte C --unites N --facture ESSAI-… [--euros E]
-  jeton-chaine depenser --compte C --unites N --service S [--noeud M]
-  jeton-chaine recompenser                  récompenses des étapes VISION validées, pas encore payées
-  jeton-chaine sceller                      transactions en attente → bloc signé
-  jeton-chaine verifier | soldes | etat | exporter [--sortie F]
-  jeton-chaine collecter                    fait cosigner la tête par les témoins (ssh)
-  jeton-chaine changer-cle --nouvelle K --motif M   déclare la clé des blocs suivants (nœud producteur arrêté)
-  jeton-chaine temoin-init --dossier D --machine M --producteur-pub "<clé publique>"   (sur le témoin)
-  jeton-chaine cosigner   --dossier D < paquet.json                                     (sur le témoin)
+  vision-chaine init                         genèse d'essai (bloc 1), une seule fois
+  vision-chaine acheter  --compte C --unites N --facture ESSAI-… [--euros E]
+  vision-chaine depenser --compte C --unites N --service S [--noeud M]
+  vision-chaine recompenser                  récompenses des étapes VISION validées, pas encore payées
+  vision-chaine sceller                      transactions en attente → bloc signé
+  vision-chaine verifier | soldes | etat | exporter [--sortie F]
+  vision-chaine collecter                    fait cosigner la tête par les témoins (ssh)
+  vision-chaine changer-cle --nouvelle K --motif M   déclare la clé des blocs suivants (nœud producteur arrêté)
+  vision-chaine temoin-init --dossier D --machine M --producteur-pub "<clé publique>"   (sur le témoin)
+  vision-chaine cosigner   --dossier D < paquet.json                                     (sur le témoin)
 
-Variables : JETON_CHAINE (dossier), JETON_BLOC0, JETON_CLE, JETON_VISION (tests). Codes : 0 fait, 1 refus, 2 outil.
+Variables : VISION_CHAINE (dossier), VISION_BLOC0, VISION_CLE, VISION_JOURNAL (tests). Codes : 0 fait, 1 refus, 2 outil.
 """
 import argparse
 import hashlib
@@ -49,22 +48,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ACCUEIL = Path.home()
-DOSSIER = Path(os.environ.get("JETON_CHAINE", ACCUEIL / ".local/share/vision/chaine-essai"))
-BLOC0 = Path(os.environ.get("JETON_BLOC0", ACCUEIL / ".local/share/vision/bloc0.json"))
-CLE = Path(os.environ.get("JETON_CLE", ACCUEIL / ".ssh/producteur_chaine_ed25519"))   # dédiée aux blocs d'essai, rien d'autre
-VISION = Path(os.environ.get("JETON_VISION", "/nonexistent"))
-CHAINE = "turbo-jeton-essai"
-FORMAT = "turbo-jeton-bloc/1"
-ESPACE_BLOC = "turbo-jeton-bloc"
-ESPACE_COSIGN = "turbo-jeton-cosignature"
-ESPACE_CLE = "turbo-jeton-cle"
+DOSSIER = Path(os.environ.get("VISION_CHAINE", ACCUEIL / ".local/share/vision/chaine-essai"))
+BLOC0 = Path(os.environ.get("VISION_BLOC0", ACCUEIL / ".local/share/vision/bloc0.json"))
+CLE = Path(os.environ.get("VISION_CLE", ACCUEIL / ".ssh/producteur_chaine_ed25519"))   # dédiée aux blocs d'essai, rien d'autre
+VISION = Path(os.environ.get("VISION_JOURNAL", "/nonexistent"))
+CHAINE = "vision-essai"
+FORMAT = "vision-bloc/1"
+ESPACE_BLOC = "vision-bloc"
+ESPACE_COSIGN = "vision-cosignature"
+ESPACE_CLE = "vision-cle"
 PRODUCTEUR = "m0"
-ACTIVES = {"reserve:usage"}          # seule réserve qui circule tant que le bloc 0 n'est pas gelé
+ACTIVES = {"reserve:usage"}          # seule réserve qui circule
 DESTRUCTION_PCT = 20                 # bloc 0 : 20 % des unités dépensées sont détruites
 TAUX_SECONDE = 1                     # récompense : unités par seconde de calcul vérifiée
 
-# ── Règles v2 (02/11/2026) : rétribution par époque, alignée sur le livre blanc (§8 ter, §11, TOKENOMIE) et Qubic ──
-# Époque de 7 jours, frontière le mercredi 12:00 UTC (comme Qubic). La réserve usage est libérée sur 4 ans
+# ── Règles v2 : rétribution par époque ──
+# Époque de 7 jours, frontière le mercredi 12:00 UTC. La réserve usage est libérée sur 4 ans
 # (208 époques), budget divisé par deux chaque année (halving) ; une époque n'émet que ce que l'usage vérifié justifie.
 # Deux scores, recalculables par tout nœud à partir de la transaction d'époque :
 #   travail    : secondes de calcul d'une étape validée (≥ 1 reçu PASS, aucun FAIL) × poids de la preuve
@@ -115,7 +114,7 @@ def repartir(contributions, budget, disponible):
             "attributions": attrib}
 TEMOINS = {"m6": ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "m6"],
            "m1": ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "m1"]}
-DOSSIER_TEMOIN = "~/jeton-temoin"
+DOSSIER_TEMOIN = "~/vision-temoin"
 NOM = re.compile(r"[a-z0-9][a-z0-9._-]{0,47}")
 ZERO = "0" * 64
 
@@ -212,7 +211,7 @@ def ajouter_jsonl(f, x):
     os.chmod(f, 0o600)
 
 
-ESPACE_TX = "turbo-jeton-tx"
+ESPACE_TX = "vision-tx"
 ADRESSE = re.compile(r"te1[0-9a-f]{40}")
 PUB = re.compile(r"ssh-ed25519 [A-Za-z0-9+/=]{60,80}")
 
@@ -264,7 +263,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
 
     def debiter(compte, u):
         if compte.startswith("reserve:") and compte not in ACTIVES and not gele:
-            raise Refus(f"{compte} est bloquée tant que le bloc 0 n'est pas gelé")
+            raise Refus(f"{compte} est bloquée")
         if soldes.get(compte, 0) < u:
             raise Refus(f"solde insuffisant sur {compte} ({soldes.get(compte, 0)} < {u})")
         soldes[compte] -= u
@@ -289,7 +288,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
         nom(tx.get("compte"), "compte")
         f = tx.get("facture", "")
         if not gele and not (isinstance(f, str) and re.fullmatch(r"ESSAI-[A-Za-z0-9-]{1,40}", f)):
-            raise Refus("achat réel fermé : bloc 0 non gelé ; en essai, la facture commence par ESSAI-")
+            raise Refus("achat réel fermé ; en essai, la facture commence par ESSAI-")
         if f in preuves:
             raise Refus(f"facture déjà convertie : {f}")
         preuves.add(f)
@@ -338,7 +337,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
                 raise Refus(f"inscription en double ({cle_registre.split(':')[0]} déjà pris)")
             preuves.add(cle_registre)
     elif t == "catalogue":
-        # offres de forfaits payées en euros, publiées par le producteur ; chaque offre reste vérifiable par tous
+        # offres de forfaits, publiées par le producteur ; chaque offre reste vérifiable par tous
         offres = tx.get("offres")
         if not isinstance(offres, dict) or not offres:
             raise Refus("catalogue vide")
@@ -349,7 +348,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
                 raise Refus(f"offre {oid} invalide : prix en centimes d'euro et unités entières positifs")
             preuves.add(f"offre:{oid}:{o['centimes']}:{o['unites']}")
     elif t == "forfait":
-        # achat d'un forfait : euros uniquement, convertis en unités d'usage non cessibles (aucun transfert n'existe)
+        # achat d'un forfait : unités d'usage non cessibles (aucun transfert n'existe)
         nom(tx.get("compte"), "compte")
         if tx.get("client") is not None:
             nom(tx["client"], "client")
@@ -540,7 +539,7 @@ def cmd_init(a):
 def mettre_en_attente(tx):
     bloc0, blocs, soldes, preuves = etat_courant()
     if not blocs:
-        raise Refus("pas de genèse d'essai : lancer `jeton-chaine init`")
+        raise Refus("pas de genèse d'essai : lancer `vision-chaine init`")
     attente = lire_jsonl(DOSSIER / F_ATTENTE)
     s, p = dict(soldes), set(preuves)
     for x in attente:
@@ -560,7 +559,7 @@ def cmd_acheter(a):
     if a.euros is not None:
         tx["euros"] = round(a.euros, 2)
     tx = mettre_en_attente(tx)
-    print(f"achat en attente : {a.unites} TURBO-essai pour compte:{a.compte} (facture {a.facture}) · {tx['id'][:12]}…")
+    print(f"achat en attente : {a.unites} VISION-essai pour compte:{a.compte} (facture {a.facture}) · {tx['id'][:12]}…")
 
 
 def cmd_depenser(a):
@@ -689,7 +688,7 @@ def projeter_epoque(k, soldes, preuves):
     return tx
 
 
-COCKPITS = Path(os.environ.get("JETON_COCKPITS", ACCUEIL / ".local/share/vision/cockpits.db"))
+COCKPITS = Path(os.environ.get("VISION_COCKPITS", ACCUEIL / ".local/share/vision/cockpits.db"))
 FACTURABLE = ("ok", "vide", "en_cours")   # R2-005 : seule la route demander servie est facturable
 
 
@@ -776,10 +775,10 @@ def cmd_epoque(a):
     print(f"époque {k} : {tx['debut']} → {tx['fin']} ({'terminée' if termine else 'en cours'}) · budget {tx['budget']:_} · "
           f"{len(tx['contributions'])} contribution(s) · points justifiés {tx['justifie']} · émis {tx['emis']}".replace("_", " "))
     for n, s in tx["scores"].items():
-        print(f"  {n:<14} {s:>6} points → {tx['attributions'].get(n, 0):>8} TURBO-essai")
+        print(f"  {n:<14} {s:>6} points → {tx['attributions'].get(n, 0):>8} VISION-essai")
     if a.clore:
         if "regles:2" not in preuves:
-            raise Refus("règles v2 non actives : lancer `jeton-chaine regles-v2` puis sceller")
+            raise Refus("règles v2 non actives : lancer `vision-chaine regles-v2` puis sceller")
         if not termine:
             print(f"rien à clore : époque {k} pas encore terminée (fin {tx['fin']})")
             return
@@ -809,7 +808,7 @@ def cmd_recompenser(a):
         mettre_en_attente({"type": "recompense", "noeud": e["noeud"], "unites": u, "preuve": e["preuve"],
                            "mission": e["mission"], "etape": e["etape"], "voie": e["voie"]})
         n += 1
-        print(f"récompense en attente : {u} TURBO-essai → noeud:{e['noeud']} ({e['mission']} / {e['etape']}, voie {e['voie']})")
+        print(f"récompense en attente : {u} VISION-essai → noeud:{e['noeud']} ({e['mission']} / {e['etape']}, voie {e['voie']})")
     print(f"{n} étape(s) validée(s) à récompenser")
 
 
@@ -829,7 +828,7 @@ def cmd_changer_cle(a):
     """Déclare la clé des blocs suivants, dans un bloc signé par la clé en cours. Nœud producteur arrêté."""
     bloc0, blocs, soldes, preuves = etat_courant()
     if not blocs:
-        raise Refus("pas de genèse d'essai : lancer `jeton-chaine init`")
+        raise Refus("pas de genèse d'essai : lancer `vision-chaine init`")
     fichier = DOSSIER / F_GENESE
     if not fichier.exists():        # le rejeu ci-dessus vient de prouver que c'est bien la clé du bloc 1
         fichier.write_text(pub_genese() + "\n")
@@ -860,8 +859,8 @@ def cmd_soldes(a):
 def exporter():
     bloc0, blocs, soldes, preuves = etat_courant()
     cos = lire_jsonl(DOSSIER / F_COSIGN)
-    return {"genere_le": maintenant(), "chaine": CHAINE, "unite": "TURBO-essai", "essai": True,
-            "bloc0": {k: bloc0[k] for k in ("empreinte", "offre_totale", "unite", "gele", "frappe_le", "regles")},
+    return {"genere_le": maintenant(), "chaine": CHAINE, "unite": "VISION-essai", "essai": True,
+            "bloc0": {k: bloc0.get(k) for k in ("empreinte", "offre_totale", "unite", "gele", "frappe_le", "regles")},
             "repartition": [{k: x[k] for k in ("categorie", "part", "unites", "liberation")} for x in bloc0["repartition"]],
             "regles": {"destruction_pct": DESTRUCTION_PCT, "taux_seconde": TAUX_SECONDE, "actives": sorted(ACTIVES)},
             "soldes": soldes, "attente": len(lire_jsonl(DOSSIER / F_ATTENTE)),
@@ -904,7 +903,7 @@ def cmd_collecter(a):
         if m in vus:
             print(f"{m} : déjà cosigné")
             continue
-        r = subprocess.run([*lance, f"python3 -B {DOSSIER_TEMOIN}/jeton-chaine cosigner --dossier {DOSSIER_TEMOIN}"],
+        r = subprocess.run([*lance, f"python3 -B {DOSSIER_TEMOIN}/vision-chaine cosigner --dossier {DOSSIER_TEMOIN}"],
                            input=paquet, capture_output=True, text=True, timeout=120)
         if r.returncode:
             print(f"{m} : REFUS ou injoignable — {(r.stdout + r.stderr).strip()[-200:]}")
@@ -926,9 +925,9 @@ def cmd_collecter(a):
 def cmd_temoin_init(a):
     d = Path(os.path.expanduser(a.dossier))
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
-    cle = d / f"{a.machine}_jeton_ed25519"
+    cle = d / f"{a.machine}_vision_ed25519"
     if not cle.exists():
-        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"jeton-temoin-{a.machine}", "-f", str(cle)],
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"vision-temoin-{a.machine}", "-f", str(cle)],
                        check=True, stdin=subprocess.DEVNULL)
     (d / "producteur.pub").write_text(a.producteur_pub.strip() + "\n")
     (d / "machine").write_text(a.machine + "\n")
@@ -958,7 +957,7 @@ def cmd_cosigner(a):
     ancre.write_text(bloc0["empreinte"] + "\n")
     tete = blocs[-1]
     ajouter_jsonl(histo, {"hauteur": tete["hauteur"], "empreinte": tete["empreinte"], "vu_le": maintenant()})
-    sig = signer(f"{tete['hauteur']}:{tete['empreinte']}", d / f"{machine}_jeton_ed25519", ESPACE_COSIGN)
+    sig = signer(f"{tete['hauteur']}:{tete['empreinte']}", d / f"{machine}_vision_ed25519", ESPACE_COSIGN)
     print(canon({"machine": machine, "hauteur": tete["hauteur"], "empreinte": tete["empreinte"], "signature": sig,
                  "horodatage": maintenant(),
                  "soldes_controle": f"offre conservée {sum(soldes.values())}, détruit {soldes.get('detruit', 0)}"}))

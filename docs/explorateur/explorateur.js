@@ -1,4 +1,4 @@
-/* Explorateur public de la chaîne d'essai TURBO-essai. Lit ../chaine/*.json ; texte toujours par textContent. */
+/* Explorateur public de la chaîne d'essai VISION-essai. Lit ../chaine/*.json ; texte toujours par textContent. */
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -80,14 +80,14 @@
     $('compte-adresse').textContent = adresse;
     if (!c.connu) message('Adresse valide, mais encore inconnue de la chaîne : aucune opération, aucun nœud rattaché.', true);
     const ab = c.forfaits[0];
-    vider($('compte-kpis'), kpi('Solde', fr.format(c.solde), 'cyan'), kpi('Abonnement', ab ? ab.offre : 'aucun', ab ? 'vert' : ''),
+    vider($('compte-kpis'), kpi('Solde', fr.format(c.solde), 'cyan'), kpi('Forfait d’essai', ab ? ab.offre : 'aucun', ab ? 'vert' : ''),
       kpi('Unités dépensées', fr.format(c.depense), ''), kpi('Détruites par ses dépenses', fr.format(c.detruit), 'rouge'),
-      kpi('Nœuds rattachés', c.noeuds.length, ''), kpi('Gagné par ses nœuds', fr.format(c.gains), 'vert'));
+      kpi('Nœuds rattachés', c.noeuds.length, ''), kpi('Reçu par ses nœuds', fr.format(c.gains), 'vert'));
     vider($('compte-forfaits'), tableau([['Offre', (f) => f.offre], ['Unités', (f) => `+${fr.format(f.unites)}`, 'num plus'],
       ['Bloc', (f) => `#${f.hauteur}`], ['Quand', (f) => heure(f.horodatage)]], c.forfaits, 'Aucun forfait (vente fermée pendant l’essai).'));
     vider($('compte-noeuds'), tableau([['Nœud', (n) => el('b', {}, n.noeud)],
       ['État', (n) => el('span', { class: `badge ${n.actif ? 'ok' : ''}` }, n.actif ? 'actif' : 'hors ligne')],
-      ['Matériel partagé', (n) => materiel(n.materiel)], ['Gagné', (n) => fr.format(n.gains), 'num plus'], ['Inscrit', (n) => `#${n.hauteur}`]],
+      ['Matériel partagé', (n) => materiel(n.materiel)], ['Reçu', (n) => fr.format(n.gains), 'num plus'], ['Inscrit', (n) => `#${n.hauteur}`]],
     c.noeuds, 'Aucun nœud rattaché à cette adresse.'));
     vider($('compte-historique'), tableau([['Bloc', (t) => `#${t.hauteur}`], ['Quand', (t) => heure(t.horodatage)], ['Type', (t) => TYPES[t.type] || t.type],
       ['Unités', (t) => el('span', { class: t.sens === '+' ? 'plus' : 'moins' }, `${t.sens}${fr.format(t.unites)}`)],
@@ -129,7 +129,7 @@
     const parNom = Object.fromEntries((etat.reseau.noeuds || []).map((n) => [n.nom, n]));
     vider($('noeuds'), tableau([['Nœud', (n) => el('a', { href: `#${n.adresse}`, onclick: (ev) => { ev.preventDefault(); $('q').value = n.adresse; chercher(n.adresse); } }, n.noeud)],
       ['État', (n) => el('span', { class: `badge ${(parNom[n.noeud] || {}).actif ? 'ok' : ''}` }, (parNom[n.noeud] || {}).actif ? 'actif' : 'hors ligne')],
-      ['Matériel partagé', (n) => materiel((parNom[n.noeud] || {}).materiel)], ['Gagné', (n) => fr.format(etat.soldes[`noeud:${n.noeud}`] || 0), 'num plus'],
+      ['Matériel partagé', (n) => materiel((parNom[n.noeud] || {}).materiel)], ['Reçu', (n) => fr.format(etat.soldes[`noeud:${n.noeud}`] || 0), 'num plus'],
       ['Inscrit au bloc', (n) => `#${n.hauteur}`]], etat.inscrits, 'Aucun nœud inscrit.'));
     const c = etat.epoque.courante;
     const reste = Math.max(0, new Date(c.fin) - Date.now());

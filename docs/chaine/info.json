@@ -1,10 +1,10 @@
 {
- "reseau": "turbo-jeton-essai",
+ "reseau": "vision-essai",
  "essai": true,
- "bloc0": "e5ef70671ea77ffe452dcdc9670ca498cfd86ffd06404dccc7c9d0783e922267",
- "hauteur": 14,
- "tete": "edd158071c897e0069b486c0dae3f6c3bf3e786d8606cc3462105131dbf647fc",
- "producteur_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQ782mQOcqO0AkeTQspSsD6/fkVifm1qkDcIcM6L4Tp",
- "genere_le": "2026-11-02T15:16:00Z",
+ "bloc0": "0f777921fe8377009c7f69515713e111c2f527ec7cff32844f1ca5c2249bb046",
+ "hauteur": 2,
+ "tete": "612a3877a5fdf5c228545c904db8f3aacbe7d189762b60608351ebd2d7505f6e",
+ "producteur_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/xh5PCUsfeopF0YqAzSC7SzNPrG3UiuV9u8d5INsub",
+ "genere_le": "2026-11-02T15:24:00Z",
  "note": "Chaîne d'essai : unités sans valeur, non cessibles ; rien n'est vendu ni offert au public."
 }

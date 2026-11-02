@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""turbo-noeud — nœud du réseau d'essai VISION (chaîne TURBO-essai), avec le portefeuille de bureau intégré.
+"""vision-noeud — nœud du réseau d'essai VISION (chaîne VISION-essai), avec le portefeuille de bureau intégré.
 
 Un seul programme, deux écoutes :
   * pair-à-pair (adresse « p2p » de la configuration) : sert les blocs, le bloc 0, la liste des pairs, et accepte
@@ -8,7 +8,7 @@ Un seul programme, deux écoutes :
   * locale (adresse « api », toujours 127.0.0.1) : le portefeuille de bureau (dossier ui/) et son API.
 
 Rôles :
-  producteur : tient la chaîne, met en attente, scelle un bloc signé dès qu'une transaction attend (m0) ;
+  producteur : tient la chaîne, met en attente, scelle un bloc signé dès qu'une transaction attend ;
   pair       : télécharge les blocs de ses pairs, REJOUE toute la chaîne depuis le bloc 0 avec la clé du producteur
                épinglée à l'installation, et n'ajoute que ce qui passe ; ses transactions partent vers ses pairs.
 
@@ -18,7 +18,7 @@ Miroirs : un nœud peut aussi lire la chaîne sur un site statique (GitHub Pages
 rejoue tout comme pour un pair, un miroir ne peut donc rien imposer. Une demande d'inscription, signée par le nœud,
 se dépose alors en ticket sur le dépôt public (configuration « depot ») et le producteur l'importe.
 
-  turbo-noeud --config ~/.local/share/turbo-noeud/config.json
+  vision-noeud --config ~/.local/share/vision-noeud/config.json
 Unités d'essai sans valeur ; rien n'est vendu ni offert au public.
 """
 import argparse
@@ -82,11 +82,11 @@ class Noeud:
             cle = str(self.chaine / "producteur")
             Path(cle + ".pub").write_text(cfg["producteur_pub"].strip() + "\n")
             bloc0 = str(self.chaine / "bloc0.json")
-        os.environ.update({"JETON_CHAINE": str(self.chaine), "JETON_BLOC0": bloc0, "JETON_CLE": cle,
-                           "JETON_VISION": cfg.get("vision", "/nonexistent")})
+        os.environ.update({"VISION_CHAINE": str(self.chaine), "VISION_BLOC0": bloc0, "VISION_CLE": cle,
+                           "VISION_JOURNAL": cfg.get("vision", "/nonexistent")})
         outil = os.path.expanduser(cfg["outil_chaine"])
-        ch = importlib.machinery.SourceFileLoader("jeton_chaine", outil)
-        spec = importlib.util.spec_from_loader("jeton_chaine", ch)
+        ch = importlib.machinery.SourceFileLoader("vision_chaine", outil)
+        spec = importlib.util.spec_from_loader("vision_chaine", ch)
         self.J = importlib.util.module_from_spec(spec)
         ch.exec_module(self.J)
         self.bloc0_chemin = Path(bloc0)
@@ -150,7 +150,7 @@ class Noeud:
     # ── synchronisation (pair) ────────────────────────────────────────────────────────────────────
     def http(self, url, donnees=None, delai=8):
         req = urllib.request.Request(url, data=None if donnees is None else json.dumps(donnees).encode(),
-                                     headers={"Content-Type": "application/json", "User-Agent": f"turbo-noeud/{VERSION}"})
+                                     headers={"Content-Type": "application/json", "User-Agent": f"vision-noeud/{VERSION}"})
         with urllib.request.urlopen(req, timeout=delai) as r:
             return json.loads(r.read(4 * 1024 * 1024))
 
@@ -323,7 +323,7 @@ class Noeud:
 
     def acheter(self, unites):
         if not self.producteur:
-            raise self.J.Refus("achat d'essai : seulement sur le nœud producteur (achat réel fermé, bloc 0 non gelé)")
+            raise self.J.Refus("achat d'essai : seulement sur le nœud producteur (achat réel fermé)")
         if not 0 < int(unites) <= 10000:
             raise self.J.Refus("achat d'essai limité à 10 000 unités par demande")
         tx = {"type": "achat", "compte": self.adresse(), "unites": int(unites),
@@ -334,7 +334,7 @@ class Noeud:
         return {"ok": True, "id": t["id"], "facture": tx["facture"]}
 
     def acheter_forfait(self, offre):
-        """Forfait payé en euros, converti en unités d'usage. Essai : facture ESSAI-, aucune somme encaissée."""
+        """Forfait d'essai : facture ESSAI-, aucune somme encaissée."""
         if not self.producteur:
             raise self.J.Refus("achat de forfait : sur le nœud producteur seulement tant que la vente réelle est fermée")
         _, blocs, _, _ = self.etat()
@@ -365,7 +365,7 @@ class Noeud:
         """Sans pair joignable (nœud public lu sur un miroir) : la transaction signée part en ticket sur le dépôt.
         Elle ne contient que des données publiques (nom, clé publique, adresses, signature)."""
         tx = self.tx_inscription()
-        corps = ("Demande d'inscription d'un nœud sur la chaîne d'essai TURBO-essai.\n\n"
+        corps = ("Demande d'inscription d'un nœud sur la chaîne d'essai VISION-essai.\n\n"
                  "Transaction signée par la clé du nœud (données publiques uniquement) :\n\n```json\n"
                  + json.dumps(tx, ensure_ascii=False, indent=1) + "\n```\n")
         r = {"ok": True, "transaction": tx, "corps": corps}
@@ -436,7 +436,7 @@ class Noeud:
         bloc0, blocs, soldes, _ = self.etat()
         hauteur_pairs = max([i["hauteur"] or 0 for i in self.pairs.values()] + [0])
         inscrits = [tx for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
-        return {"version": VERSION, "nom": self.nom, "role": self.cfg["role"], "reseau": "turbo-jeton-essai", "nom_reseau": "VISION",
+        return {"version": VERSION, "nom": self.nom, "role": self.cfg["role"], "reseau": "vision-essai", "nom_reseau": "VISION",
                 "regles": 2 if any(tx.get("type") == "regles" for b in blocs for tx in b["transactions"]) else 1,
                 "hauteur": len(blocs), "hauteur_pairs": hauteur_pairs,
                 "synchro": "à jour" if self.producteur or len(blocs) >= hauteur_pairs else "en retard",
@@ -592,7 +592,7 @@ def fabrique(noeud, local):
              ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json"}
 
     class H(BaseHTTPRequestHandler):
-        server_version = f"turbo-noeud/{VERSION}"
+        server_version = f"vision-noeud/{VERSION}"
 
         def log_message(self, *a):
             pass
