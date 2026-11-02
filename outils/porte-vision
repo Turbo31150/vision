@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""porte-vision — la porte d'un parc VISION : l'assistant des nœuds de la bêta y pose ses questions (02/11/2026).
+
+Authentification sans compte ni mot de passe : chaque demande est signée par le portefeuille du nœud
+(ssh-keygen, espace « vision-assistant »), comme les transactions de la chaîne. La porte :
+  - vérifie la signature, l'horodatage (± 120 s) et refuse le rejeu d'une même signature ;
+  - ne transmet QUE la demande de réponse (POST /v1/chat/completions) au moteur du parc (par défaut le hub
+    http://127.0.0.1:18800/v1), jamais à un cockpit ni à un outil ; flux coupé, max_tokens plafonné ;
+  - mesure, SANS garder aucun contenu : compte, nœud, version, matériel déclaré par le nœud, jetons entrée/sortie,
+    durée, débit (jetons/s), code de retour ; base SQLite locale, lue par `porte-vision --stats` (jamais par HTTP :
+    derrière une redirection publique, toute demande paraît venir de 127.0.0.1) ;
+  - limite le nombre de demandes SIMULTANÉES (protection du parc), sans quota par utilisateur ;
+  - contrôle : une liste noire d'adresses de portefeuille (fichier relu à chaud) refuse un compte abusif.
+Toute clé ed25519 est acceptée (bêta ouverte et gratuite) : la signature IDENTIFIE la machine, elle ne la trie pas.
+Écoute par défaut sur 127.0.0.1:18652 : la publication vers l'extérieur (redirection, HTTPS) est un choix du
+propriétaire du parc, hors de cet outil.
+
+  porte-vision [--ecoute 127.0.0.1:18652] [--moteur http://127.0.0.1:18800/v1] [--outil-chaine CHEMIN]
+               [--simultanees 4] [--base ~/.local/share/porte-vision/stats.db] [--liste-noire FICHIER]
+  porte-vision --stats      (bilan JSON : machines, matériel déclaré, demandes, jetons, débit)
+"""
+import argparse
+import base64
+import hashlib
+import http.server
+import importlib.machinery
+import importlib.util
+import json
+import os
+import socketserver
+import sqlite3
+import threading
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+CORPS_MAX = 64 * 1024
+CHAMPS = {"model", "messages", "temperature", "top_p", "max_tokens", "stop"}
+JETONS_MAX = 1500
+FENETRE_S = 120
+
+
+OUTIL_DEFAUT = next((p for p in (Path(__file__).resolve().parent.parent / "chaine" / "vision-chaine",
+                                  Path.home() / ".local/share/vision-noeud/code/vision-chaine") if p.exists()),
+                    Path.home() / ".local/share/vision-noeud/code/vision-chaine")
+
+
+def capacite_bornee(c):
+    c = {k: v for k, v in c.items() if k != "machine"} if isinstance(c, dict) else {}   # matériel, jamais le nom d'hôte
+    t = json.dumps(c, ensure_ascii=False)
+    return t if len(t) <= 4000 else "{}"
+
+
+def charger_chaine(chemin):
+    ch = importlib.machinery.SourceFileLoader("vision_chaine", chemin)
+    spec = importlib.util.spec_from_loader("vision_chaine", ch)
+    m = importlib.util.module_from_spec(spec)
+    ch.exec_module(m)
+    return m
+
+
+class Porte:
+    def __init__(self, a):
+        self.J = charger_chaine(os.path.expanduser(a.outil_chaine))
+        self.noire, self.noire_mtime = Path(os.path.expanduser(a.liste_noire)), None
+        self.bannis = set()
+        self.moteur = a.moteur.rstrip("/")
+        self.creneaux = threading.BoundedSemaphore(a.simultanees)
+        self.vues, self.verrou = {}, threading.Lock()
+        self.base = Path(os.path.expanduser(a.base))
+        self.base.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.base) as c:
+            c.execute("CREATE TABLE IF NOT EXISTS demandes (ts TEXT, compte TEXT, noeud TEXT, version TEXT, modele TEXT,"
+                      " jetons_entree INT, jetons_sortie INT, estime INT, duree_ms INT, jetons_par_s REAL, code INT)")
+            c.execute("CREATE TABLE IF NOT EXISTS machines (compte TEXT PRIMARY KEY, noeud TEXT, version TEXT,"
+                      " capacite TEXT, premiere TEXT, derniere TEXT, demandes INT DEFAULT 0)")
+
+    def banni(self, compte):
+        try:
+            m = self.noire.stat().st_mtime
+        except OSError:
+            self.bannis, self.noire_mtime = set(), None
+            return False
+        if m != self.noire_mtime:
+            self.bannis = {l.split("#")[0].strip() for l in self.noire.read_text().splitlines()} - {""}
+            self.noire_mtime = m
+        return compte in self.bannis
+
+    def rejeu(self, empreinte):
+        # clé canonique (clé publique + message signé) : une armure de signature réécrite ne donne pas un 2e passage
+        cle, maintenant = empreinte, time.time()
+        with self.verrou:
+            for k in [k for k, t in self.vues.items() if maintenant - t > 2 * FENETRE_S]:
+                del self.vues[k]
+            if cle in self.vues:
+                return True
+            self.vues[cle] = maintenant
+            return False
+
+    def verifier(self, entetes, corps):
+        pub, horo, sig64 = (entetes.get(k) or "" for k in ("X-Vision-Cle", "X-Vision-Horodatage", "X-Vision-Signature"))
+        if not (pub and horo and sig64):
+            return None, "demande non signée : un nœud VISION signe ses demandes avec son portefeuille"
+        try:
+            t = datetime.strptime(horo, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            return None, "horodatage illisible"
+        if abs(time.time() - t) > FENETRE_S:
+            return None, "horodatage hors fenêtre (horloge de la machine à régler)"
+        try:
+            sig = base64.b64decode(sig64, validate=True).decode("utf-8")
+            compte = self.J.adresse(pub)
+        except (ValueError, self.J.Refus):
+            return None, "clé ou signature illisible"
+        message = f"vision-assistant\n{horo}\n{hashlib.sha256(corps).hexdigest()}"
+        if not self.J.verifier_sig(message, sig, " ".join(pub.split()[:2]), compte, "vision-assistant"):
+            return None, "signature refusée"
+        if self.banni(compte):
+            return None, "portefeuille refusé par le propriétaire du parc"
+        if self.rejeu(hashlib.sha256(f"{compte}\n{message}".encode()).hexdigest()):
+            return None, "demande rejouée"
+        return compte, None
+
+    def noter(self, compte, vision, modele, usage, duree_ms, code, car_entree=0, car_sortie=0):
+        # le hub du parc ne renvoie pas toujours `usage` : estimation à 4 caractères par jeton, marquée estime=1
+        jin, jout = int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)
+        estime = 0
+        if not (jin or jout) and (car_entree or car_sortie):
+            jin, jout, estime = -(-car_entree // 4), -(-car_sortie // 4), 1
+        debit = round(jout / (duree_ms / 1000), 1) if duree_ms and jout else None
+        maintenant = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with sqlite3.connect(self.base) as c:
+            c.execute("INSERT INTO demandes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                      (maintenant, compte, str(vision.get("noeud", ""))[:48], str(vision.get("version", ""))[:24],
+                       modele[:80], jin, jout, estime, duree_ms, debit, code))
+            c.execute("INSERT INTO machines (compte, noeud, version, capacite, premiere, derniere, demandes) VALUES "
+                      "(?,?,?,?,?,?,1) ON CONFLICT(compte) DO UPDATE SET noeud=excluded.noeud, version=excluded.version,"
+                      " capacite=excluded.capacite, derniere=excluded.derniere, demandes=demandes+1",
+                      (compte, str(vision.get("noeud", ""))[:48], str(vision.get("version", ""))[:24],
+                       capacite_bornee(vision.get("capacite")), maintenant, maintenant))
+
+    def stats(self):
+        with sqlite3.connect(self.base) as c:
+            c.row_factory = sqlite3.Row
+            tot = dict(c.execute("SELECT COUNT(*) demandes, COUNT(DISTINCT compte) comptes, SUM(jetons_entree) jetons_entree,"
+                                 " SUM(jetons_sortie) jetons_sortie, ROUND(AVG(duree_ms)) duree_moyenne_ms,"
+                                 " ROUND(AVG(jetons_par_s),1) debit_moyen, SUM(code != 200) echecs FROM demandes").fetchone())
+            moteurs = [dict(r) for r in c.execute("SELECT modele, COUNT(*) demandes, ROUND(AVG(duree_ms)) duree_moyenne_ms,"
+                                                   " ROUND(AVG(jetons_par_s),1) debit_moyen FROM demandes WHERE code = 200"
+                                                   " GROUP BY modele ORDER BY demandes DESC")]
+            machines = [dict(r) for r in c.execute("SELECT compte, noeud, version, capacite, premiere, derniere, demandes"
+                                                    " FROM machines ORDER BY derniere DESC LIMIT 200")]
+        for m in machines:
+            m["capacite"] = json.loads(m["capacite"] or "{}")
+        return {"ok": True, "total": tot, "moteurs": moteurs, "machines": machines}
+
+
+def gestionnaire(porte):
+    class G(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        server_version = "porte-vision"
+        timeout = 30
+
+        def log_message(self, *a):
+            pass
+
+        def repondre(self, code, obj):
+            b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+        def do_GET(self):
+            if self.path == "/sante":
+                return self.repondre(200, {"ok": True, "porte": "vision", "version": "0.1"})
+            return self.repondre(404, {"ok": False, "erreur": "inconnu"})
+
+        def do_POST(self):
+            if self.path.split("?", 1)[0] != "/v1/chat/completions":
+                return self.repondre(404, {"ok": False, "erreur": "inconnu"})
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = -1
+            if n <= 0 or n > CORPS_MAX:
+                return self.repondre(413, {"ok": False, "erreur": "demande absente ou trop grosse"})
+            corps = self.rfile.read(n)
+            compte, refus = porte.verifier(self.headers, corps)
+            if refus:
+                code = 409 if "rejou" in refus else 403 if "refusé par" in refus else 401
+                return self.repondre(code, {"ok": False, "erreur": refus})
+            try:
+                brut = json.loads(corps)
+                vision = brut.get("vision") if isinstance(brut.get("vision"), dict) else {}
+                d = {k: v for k, v in brut.items() if k in CHAMPS}
+                if not isinstance(d.get("messages"), list) or not d["messages"]:
+                    raise ValueError("messages")
+                d.update(stream=False, max_tokens=max(16, min(int(d.get("max_tokens") or 900), JETONS_MAX)))
+            except (ValueError, TypeError, AttributeError):
+                return self.repondre(400, {"ok": False, "erreur": "JSON invalide"})
+            if not porte.creneaux.acquire(timeout=30):
+                return self.repondre(503, {"ok": False, "erreur": "parc occupé, réessayer dans un instant"})
+            t0 = time.time()
+            try:
+                req = urllib.request.Request(porte.moteur + "/chat/completions", data=json.dumps(d).encode("utf-8"),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    rep = json.loads(r.read(4_000_000).decode("utf-8"))
+                if not isinstance(rep, dict):
+                    raise ValueError("réponse")
+                code = 200
+            except (OSError, ValueError) as e:
+                rep, code = {"ok": False, "erreur": f"moteur du parc injoignable ({e.__class__.__name__})"}, 502
+            finally:
+                porte.creneaux.release()
+            duree = int((time.time() - t0) * 1000)
+            try:
+                sortie = len(rep["choices"][0]["message"]["content"] or "")
+            except (KeyError, IndexError, TypeError):
+                sortie = 0
+            entree = sum(len(str(m.get("content") or "")) for m in d["messages"] if isinstance(m, dict))
+            porte.noter(compte, vision, str(rep.get("model") or d.get("model") or ""),
+                        rep.get("usage") if isinstance(rep.get("usage"), dict) else {}, duree, code, entree, sortie)
+            return self.repondre(code, rep)
+    return G
+
+
+class Serveur(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--ecoute", default="127.0.0.1:18652")
+    ap.add_argument("--moteur", default="http://127.0.0.1:18800/v1")
+    ap.add_argument("--outil-chaine", default=str(OUTIL_DEFAUT))
+    ap.add_argument("--simultanees", type=int, default=4)
+    ap.add_argument("--base", default="~/.local/share/porte-vision/stats.db")
+    ap.add_argument("--liste-noire", default="~/.local/share/porte-vision/liste-noire.txt")
+    ap.add_argument("--stats", action="store_true")
+    args = ap.parse_args()
+    if args.stats:
+        print(json.dumps(Porte(args).stats(), ensure_ascii=False, indent=1))
+        raise SystemExit(0)
+    hote, _, port = args.ecoute.rpartition(":")
+    Serveur((hote, int(port)), gestionnaire(Porte(args))).serve_forever()

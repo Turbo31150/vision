@@ -22,6 +22,8 @@ se dépose alors en ticket sur le dépôt public (configuration « depot ») et 
 Unités d'essai sans valeur ; rien n'est vendu ni offert au public.
 """
 import argparse
+import hashlib
+import base64
 import csv
 import ctypes
 import http.client
@@ -507,10 +509,22 @@ class Noeud:
             f"{len(p.get('en_attente') or [])} opération(s) en attente.", "Mouvements :", *(mouvements or ["- aucun"])])
 
     def _llm(self, a, messages, max_jetons):
-        corps = json.dumps({"model": str(a.get("modele") or ""), "messages": messages, "temperature": 0.2,
-                            "max_tokens": int(max_jetons), "stream": False}).encode("utf-8")
-        req = urllib.request.Request(str(a["url"]).rstrip("/") + "/chat/completions", data=corps,
-                                     headers={"Content-Type": "application/json"})
+        demande = {"model": str(a.get("modele") or ""), "messages": messages, "temperature": 0.2,
+                   "max_tokens": int(max_jetons), "stream": False}
+        entetes = {"Content-Type": "application/json"}
+        if a.get("passerelle"):
+            # Porte VISION : la demande est signée par le portefeuille de ce nœud (authentification, sans compte ni
+            # mot de passe) et porte sa fiche déclarée (matériel, version) pour le suivi d'usage et d'efficacité.
+            cap = {k: v for k, v in (self.capacite() or {}).items() if k != "machine"}   # matériel, pas le nom d'hôte
+            demande["vision"] = {"compte": self.adresse(), "noeud": self.nom, "version": VERSION, "capacite": cap}
+        corps = json.dumps(demande, ensure_ascii=False).encode("utf-8")
+        if a.get("passerelle"):
+            horo = self.J.maintenant()
+            message = f"vision-assistant\n{horo}\n{hashlib.sha256(corps).hexdigest()}"
+            sig = self.J.signer(message, self.cle_portefeuille, "vision-assistant")
+            entetes.update({"X-Vision-Cle": self.pub(self.cle_portefeuille), "X-Vision-Horodatage": horo,
+                            "X-Vision-Signature": base64.b64encode(sig.encode("utf-8")).decode("ascii")})
+        req = urllib.request.Request(str(a["url"]).rstrip("/") + "/chat/completions", data=corps, headers=entetes)
         with urllib.request.urlopen(req, timeout=int(a.get("delai", 180))) as rep:
             c = json.loads(rep.read(4_000_000).decode("utf-8"))["choices"][0]
         return (c.get("message") or {}).get("content") or "", c.get("finish_reason")
