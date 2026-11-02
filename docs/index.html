@@ -3,129 +3,299 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VISION · nœud, portefeuille et partage de puissance</title>
-<meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve.">
+<title>VISION · le travail d'une machine, vérifié par une autre</title>
+<meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve. Unités d'essai sans valeur, rien en vente.">
 <link rel="icon" href="icone.svg">
+<link rel="preload" href="polices/UbuntuSans-variable.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="style.css">
+<script defer src="ruban.js"></script>
 <script defer src="projet.js"></script>
 </head>
 <body>
-<header class="haut">
-  <a class="marque" href="./"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Réseau</b></span></a>
-  <nav class="liens">
-    <a class="actif" href="./">Le projet</a>
-    <a href="#fonctionnement">Fonctionnement</a>
-    <a href="explorateur/">Explorateur</a>
-    <a href="#rejoindre">Rejoindre</a>
-    <a href="https://github.com/Turbo31150/vision">Code</a>
-  </nav>
+<header class="entete">
+  <div class="cadre">
+    <a class="marque" href="./"><img src="icone.svg" alt="" width="30" height="30">VISION</a>
+    <nav class="liens" aria-label="Navigation principale">
+      <a href="./" aria-current="page">Le projet</a>
+      <a href="explorateur/">Explorateur</a>
+      <a href="#feuille-de-route">Feuille de route</a>
+      <a href="#rejoindre">Rejoindre</a>
+      <a href="#boutique">Boutique</a>
+      <a href="https://github.com/Turbo31150/vision">Code</a>
+    </nav>
+  </div>
 </header>
-<main class="page">
-  <div class="bandeau">Chaîne d'ESSAI : les unités n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
+<div class="essai"><div class="cadre">Réseau d'essai : les unités VISION-essai n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div></div>
 
-  <section class="hero">
-    <div>
-      <div class="k">VISION · IA locale</div>
-      <h1>Plusieurs machines, une seule puissance, récompensée sur preuve.</h1>
-      <p class="sous">VISION relie des machines équipées de cartes graphiques pour faire tourner des modèles d'IA en local. Chaque machine installe un nœud et son portefeuille ; le travail de l'une n'est compté qu'après avoir été revérifié par une autre.</p>
-      <div class="boutons">
-        <a class="bouton primaire" href="#rejoindre">Installer un nœud</a>
-        <a class="bouton" href="explorateur/">Voir la chaîne et les blocs</a>
+<main>
+  <section class="heros">
+    <div class="cadre">
+      <h1>Le travail d'une machine ne compte qu'après le regard d'une autre.</h1>
+      <p>VISION relie des machines équipées de cartes graphiques pour faire tourner l'IA en local. Chacune installe un nœud et son portefeuille ; chaque calcul est rejoué et signé par une autre machine avant d'être récompensé.</p>
+      <div class="actions">
+        <a class="bouton principal" href="#rejoindre">Installer un nœud</a>
+        <a class="bouton" href="explorateur/">Ouvrir l'explorateur</a>
       </div>
     </div>
-    <figure class="schema" aria-label="Schéma : trois machines, chacune avec son nœud et son portefeuille, autour d'une chaîne de blocs signés ; chaque travail est revérifié par une autre machine qui signe un reçu.">
-      <svg viewBox="0 0 440 360" role="img">
-        <title>Trois machines autour d'une même chaîne</title>
-        <defs>
-          <marker id="fl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
-        </defs>
-        <g class="lien-chaine" stroke-width="2" fill="none">
-          <line x1="110" y1="92" x2="188" y2="160" marker-end="url(#fl)"/>
-          <line x1="330" y1="92" x2="252" y2="160" marker-end="url(#fl)"/>
-          <line x1="220" y1="282" x2="220" y2="232" marker-end="url(#fl)"/>
-        </g>
-        <g class="lien-recu" stroke-width="2" fill="none" stroke-dasharray="5 5">
-          <path d="M160 52 Q220 18 280 52" marker-end="url(#fl)"/>
-          <path d="M372 112 Q410 230 290 300" marker-end="url(#fl)"/>
-        </g>
-        <text class="t-recu" x="220" y="26" text-anchor="middle">reçu signé</text>
-        <text class="t-recu" x="408" y="214" text-anchor="end">reçu signé</text>
-        <g class="machine"><rect x="20" y="40" width="140" height="62" rx="10"/><text x="90" y="66" text-anchor="middle" class="t-titre">Machine A</text><text x="90" y="86" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
-        <g class="machine"><rect x="280" y="40" width="140" height="62" rx="10"/><text x="350" y="66" text-anchor="middle" class="t-titre">Machine B</text><text x="350" y="86" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
-        <g class="machine"><rect x="150" y="282" width="140" height="62" rx="10"/><text x="220" y="308" text-anchor="middle" class="t-titre">Machine C</text><text x="220" y="328" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
-        <g class="chaine">
-          <rect x="150" y="162" width="140" height="68" rx="12"/>
-          <rect x="166" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="198" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="230" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="262" y="178" width="14" height="22" rx="4" class="bloc dernier"/>
-          <text x="220" y="220" text-anchor="middle" class="t-petit">blocs signés, rejoués</text>
-        </g>
-      </svg>
-    </figure>
   </section>
 
-  <div class="kpis" id="kpis" aria-live="polite"></div>
-  <p class="vide" id="kpis-date"></p>
+  <section class="ruban-zone" aria-labelledby="titre-ruban">
+    <div class="cadre">
+      <div class="ruban-tete">
+        <h2 id="titre-ruban">La chaîne, bloc par bloc</h2>
+        <p id="ruban-info">Lecture de la copie publique…</p>
+      </div>
+      <div class="ruban" id="ruban" role="list" aria-label="Blocs de la chaîne d'essai"></div>
+      <div class="legende" id="legende"></div>
+      <ul class="chiffres" id="chiffres" aria-live="polite"></ul>
+      <p class="date-mesure" id="date-mesure"></p>
+    </div>
+  </section>
 
-  <h2 id="fonctionnement">Ce qui tourne déjà</h2>
-  <div class="grille trois">
-    <div class="carte"><div class="k">Le nœud</div><h3>Un fichier, sans droits d'administrateur</h3>
-      <p>L'installateur crée deux clés sur votre machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais. Le nœud rejoue toute la chaîne depuis le bloc 0 et refuse ce qui ne se vérifie pas.</p></div>
-    <div class="carte"><div class="k">Le portefeuille</div><h3>Un portefeuille de bureau</h3>
-      <p>Servi uniquement sur la machine : solde, adresse, dépenses signées, blocs, réseau, puissance partagée. On s'y connecte avec une adresse pour voir un compte tel que la chaîne le connaît.</p></div>
-    <div class="carte"><div class="k">Les unités d'usage</div><h3>Dépensées, signées, en partie détruites</h3>
-      <p>Un service rendu par le réseau se règle par une dépense signée par le portefeuille. 20 % sont détruits, 80 % reviennent à la réserve qui récompense les machines. Aucun transfert entre comptes.</p></div>
-    <div class="carte"><div class="k">Le partage de puissance</div><h3>Chaque nœud annonce sa machine</h3>
-      <p>Cartes, mémoire, cœurs, charge : les annonces signées sont vérifiées puis additionnées. Le portefeuille et l'explorateur montrent les machines, les nœuds et la puissance cumulée.</p></div>
-    <div class="carte"><div class="k">La récompense</div><h3>Sur preuve, jamais sur déclaration</h3>
-      <p>Un travail compte quand une autre machine l'a rejoué et a signé un reçu. Chaque semaine, le budget de l'époque se partage au prorata des points ; il est divisé par deux chaque année.</p></div>
-    <div class="carte"><div class="k">L'explorateur</div><h3>Tout est public et vérifiable</h3>
-      <p>Blocs, transactions, nœuds inscrits et soldes sont publiés avec leurs signatures. Un nœud lit cette copie et la rejoue lui-même : elle ne peut rien lui imposer.</p></div>
-  </div>
+  <section class="section" id="fonctionnement">
+    <div class="cadre">
+      <h2>Ce qui tourne déjà</h2>
+      <p class="chapeau">Tout ce qui suit fonctionne sur nos machines depuis le 2 novembre 2026, sur une chaîne d'essai.</p>
+      <dl class="tourne">
+        <dt>Le nœud</dt>
+        <dd>Il s'installe en un seul fichier, sans droits d'administrateur. À la première ouverture, il crée deux clés sur la machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais. Il rejoue toute la chaîne depuis le bloc 0 et refuse ce qui ne se vérifie pas.</dd>
+        <dt>Le portefeuille</dt>
+        <dd>Servi uniquement sur la machine, il montre le solde, l'adresse, les dépenses signées, les blocs, le réseau et la puissance partagée. On s'y connecte avec une adresse pour lire un compte tel que la chaîne le connaît.</dd>
+        <dt>Les unités VISION-essai</dt>
+        <dd>Un service rendu par le réseau se règle par une dépense signée par le portefeuille. 20 % des unités sont détruites, 80 % reviennent à la réserve qui récompense les machines. Aucune instruction ne transfère des unités d'un compte à un autre.</dd>
+        <dt>Le partage de puissance</dt>
+        <dd>Chaque nœud annonce lui-même sa machine : cartes, mémoire, cœurs, charge. Les annonces sont vérifiées puis additionnées, et l'explorateur montre la puissance réellement en ligne.</dd>
+        <dt>La récompense</dt>
+        <dd>Un travail compte quand une autre machine l'a rejoué et a signé un reçu. Chaque semaine, le budget de l'époque se partage au prorata des points ; ce budget est divisé par deux chaque année. C'est une règle de calcul, pas une promesse de gain : les unités n'ont aucune valeur. Pour l'instant, les récompenses restent calculées en simulation.</dd>
+        <dt>L'explorateur</dt>
+        <dd>Les blocs, les transactions, les nœuds et les soldes sont publiés ici avec leurs signatures. Un nœud lit cette copie et la rejoue lui-même : elle ne peut rien lui imposer.</dd>
+      </dl>
+    </div>
+  </section>
 
-  <h2>Le circuit d'une unité</h2>
-  <ol class="circuit-unite">
-    <li><span class="n">1</span><b>Créditée</b><span>Par des factures d'essai seulement : aucune somme n'est encaissée.</span></li>
-    <li><span class="n">2</span><b>Dépensée</b><span>Une réponse d'un modèle, une lecture d'image : le portefeuille signe la dépense, le producteur la scelle dans un bloc.</span></li>
-    <li><span class="n">3</span><b>Détruite à 20 %</b><span>Le reste retourne à la réserve d'usage. L'offre en circulation ne fait que décroître.</span></li>
-    <li><span class="n">4</span><b>Rendue aux machines</b><span>À la clôture de l'époque (mercredi 12:00 UTC), la réserve récompense le travail vérifié et les vérifications signées.</span></li>
-  </ol>
+  <section class="section" id="pas-a-pas">
+    <div class="cadre">
+      <h2>Comment ça marche, pas à pas</h2>
+      <p class="chapeau">De l'installation à la récompense : ce que fait chaque machine, et ce que vous pouvez vérifier vous-même.</p>
+      <ol class="pas">
+        <li>
+          <figure class="capture"><img src="images/reseau.jpg" alt="Plusieurs ordinateurs reliés par des lignes lumineuses autour d'une pile de blocs translucides." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
+          <div class="pas-texte">
+            <h3>Des machines ordinaires, reliées</h3>
+            <p>Un PC de bureau ou un portable sous Linux, avec ou sans carte graphique, suffit. Chaque machine installe un nœud : c'est lui qui garde une copie de la chaîne, parle aux autres nœuds et sert le portefeuille.</p>
+            <p>Une seule machine, le producteur, signe aujourd'hui les blocs. Les autres ne lui font pas confiance pour autant : elles rejouent tout ce qu'il publie.</p>
+          </div>
+        </li>
+        <li>
+          <figure class="capture" id="fig-cles"><img src="images/noeud-cles.jpg" alt="Un ordinateur de bureau qui garde deux petites clés lumineuses à l'intérieur, entouré de blocs translucides." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
+          <div class="pas-texte">
+            <h3>Installer : un fichier, deux clés qui ne sortent jamais</h3>
+            <p>L'installateur est un script shell suivi d'une archive du code de ce dépôt. Il s'installe dans votre dossier personnel, sans droits d'administrateur, et crée deux clés ed25519 : une pour le nœud, une pour le portefeuille. Elles restent dans <code>~/.local/share/vision-noeud</code>.</p>
+            <p>Le portefeuille n'est servi que sur la machine elle-même, à l'adresse <code>http://127.0.0.1:8861/</code>. Personne d'autre ne peut l'ouvrir ni signer à votre place.</p>
+          </div>
+        </li>
+        <li>
+          <figure class="capture"><img src="images/explorateur.jpg" alt="Capture de l'explorateur VISION : deux blocs, la légende des types de transaction et les chiffres du réseau." width="1200" height="725" loading="lazy"><figcaption>Capture réelle de l'explorateur, chaîne publique vision-essai.</figcaption></figure>
+          <div class="pas-texte">
+            <h3>Rejouer toute la chaîne avant d'y croire</h3>
+            <p>Le nœud récupère la chaîne chez ses pairs du réseau local, ou sur la copie publique de ce site. Il la rejoue depuis le bloc 0. Pour chaque bloc, il vérifie :</p>
+            <ul class="sobre">
+              <li>la hauteur et l'empreinte du bloc précédent ;</li>
+              <li>la racine de Merkle des transactions ;</li>
+              <li>l'empreinte des soldes après le bloc ;</li>
+              <li>la signature du producteur, avec la clé épinglée dans l'installateur.</li>
+            </ul>
+            <p>Une copie ou un pair qui triche est refusé au premier écart. Un miroir ne peut rien imposer à un nœud.</p>
+          </div>
+        </li>
+        <li>
+          <figure class="capture" id="fig-puissance"><img src="images/puissance.jpg" alt="Les cartes graphiques de trois ordinateurs réunissent leur puissance en un seul flux lumineux vers un cœur d'IA locale." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
+          <div class="pas-texte">
+            <h3>Mettre la puissance en commun</h3>
+            <p>Chaque nœud annonce sa machine : cartes graphiques, mémoire, cœurs, charge. L'annonce est signée par la clé du nœud, vérifiée, puis additionnée aux autres. L'explorateur ne compte une machine en ligne que si elle a répondu dans les deux dernières minutes.</p>
+            <p>VISION n'exécute rien lui-même. Les modèles d'IA tournent sur les machines ; VISION recense la puissance disponible et inscrit les preuves du travail fait.</p>
+          </div>
+        </li>
+        <li>
+          <figure class="capture" id="fig-verification"><img src="images/verification.jpg" alt="Deux ordinateurs face à face ; un reçu scellé passe de l'un à l'autre." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
+          <div class="pas-texte">
+            <h3>Le travail d'une machine, vérifié par une autre</h3>
+            <p>Quand une machine termine une étape de travail, une autre machine la rejoue et signe un reçu : réussi, échoué ou indéterminé. Sans reçu, pas de point.</p>
+            <ul class="sobre">
+              <li>Points de travail : les secondes de l'étape validée, doublées si le résultat est retrouvé à l'identique.</li>
+              <li>Points de vérification : un point par reçu signé, pour la machine qui a vérifié.</li>
+              <li>À la clôture de l'époque, le budget se partage au prorata des points ; le reliquat reste en réserve.</li>
+            </ul>
+            <p>La vérification des reçus s'appuie sur un module du producteur qui n'est pas publié ici. Tant que cette vérification n'est pas ouverte et prouvée, les récompenses restent en simulation.</p>
+          </div>
+        </li>
+        <li>
+          <div class="pas-texte pas-large">
+            <h3>Vérifier sans nous croire</h3>
+            <p>L'explorateur montre les blocs, les transactions, les nœuds et les comptes, signatures comprises. Pour aller plus loin, le dépôt fournit un vérificateur indépendant qui rejoue toute la chaîne sans utiliser le code du nœud. Il ne demande que Python 3.10 et <code>ssh-keygen</code> :</p>
+<pre>git clone https://github.com/Turbo31150/vision && cd vision
+python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</pre>
+            <p>Sans <code>--cle-origine</code>, la clé vient du même site que les blocs : cela prouve que la chaîne est cohérente, pas qui l'a signée. Demandez la clé du producteur par un autre canal.</p>
+          </div>
+        </li>
+      </ol>
+      <p class="vide">Les illustrations sont générées par IA et ne montrent pas de vraies machines. Les captures de l'explorateur sont réelles.</p>
+    </div>
+  </section>
 
-  <h2>Le parc en ce moment</h2>
-  <div class="carte"><div id="parc" class="table-boite"><p class="vide">Chargement…</p></div>
-    <p class="vide" style="margin-top:10px">Chaque nœud annonce lui-même sa machine. Un nœud n'est actif que s'il a répondu dans les deux dernières minutes.</p></div>
+  <section class="section" id="circuit">
+    <div class="cadre">
+      <h2>Le circuit d'une unité</h2>
+      <p class="chapeau">Quatre étapes, toutes inscrites dans la chaîne.</p>
+      <ol class="circuit">
+        <li style="--c: var(--credit)"><b>Créditée</b><span>Par des factures d'essai seulement : aucune somme n'est encaissée.</span></li>
+        <li style="--c: var(--ambre)"><b>Dépensée</b><span>Une réponse d'un modèle, une lecture d'image : le portefeuille signe la dépense, le producteur la scelle dans un bloc.</span></li>
+        <li style="--c: var(--corail)"><b>Détruite à 20 %</b><span>Le reste retourne à la réserve d'usage. Les unités en circulation ne font que diminuer.</span></li>
+        <li style="--c: var(--sarcelle)"><b>Rendue aux machines</b><span>À la clôture de l'époque, le mercredi à 12:00 UTC, la réserve récompense le travail vérifié et les vérifications signées.</span></li>
+      </ol>
+    </div>
+  </section>
 
-  <h2 id="rejoindre">Rejoindre le réseau</h2>
-  <p class="sous">Linux, Python 3.10 ou plus récent et <code>ssh-keygen</code> (paquet openssh-client). Tout s'installe dans votre dossier personnel.</p>
-  <ol class="etapes">
-    <li>Téléchargez l'installateur et vérifiez son empreinte :
+  <section class="section">
+    <div class="cadre">
+      <h2>Le portefeuille, connecté par adresse</h2>
+      <p class="chapeau">On saisit l'adresse d'un portefeuille ou d'un nœud, et la chaîne dit tout ce qu'elle sait de lui. Seule la clé gardée sur la machine peut signer une dépense.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="cadre">
+      <h2>Le parc en ce moment</h2>
+      <p class="chapeau">Chaque nœud annonce lui-même sa machine. Un nœud n'est compté en ligne que s'il a répondu dans les deux dernières minutes.</p>
+      <div class="table-boite" id="parc"><p class="vide">Lecture du parc…</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="feuille-de-route">
+    <div class="cadre">
+      <h2>Feuille de route</h2>
+      <p class="chapeau">Ce qui est fait se vérifie dans l'explorateur ou dans le code. Le reste est daté quand une date existe, conditionnel sinon.</p>
+      <ol class="frise">
+        <li class="fait">
+          <div class="quand"><span class="date">Phase 0, 2 novembre 2026 au matin</span><span class="statut">Fait</span></div>
+          <h3>Les fondations de la confiance</h3>
+          <ul>
+            <li>Chaque événement important est signé par la machine qui l'a produit.</li>
+            <li>Un grand livre scellé, que trois témoins répliquent. Pour l'instant, ces trois témoins tournent sur des machines du même propriétaire.</li>
+            <li>Des reçus de travail : une autre machine rejoue l'étape et signe réussi, échoué ou indéterminé.</li>
+            <li>Une première mission utile, chaque jour : la sauvegarde de la nuit, relue et signée par deux autres machines.</li>
+          </ul>
+        </li>
+        <li class="fait">
+          <div class="quand"><span class="date">Phase 1, 2 novembre 2026</span><span class="statut">Fait</span></div>
+          <h3>La chaîne d'essai</h3>
+          <ul>
+            <li>Une chaîne d'essai interne : le bloc 0, encore à l'état de brouillon, puis 14 blocs signés le 2 novembre.</li>
+            <li>Des dépenses signées par les portefeuilles, dont 20 % sont détruits.</li>
+            <li>Des forfaits d'essai, sans aucune somme encaissée.</li>
+            <li>Les règles de récompense par époque, entrées en vigueur au bloc 7 ; une clé dédiée à la signature des blocs, déclarée au bloc 13.</li>
+            <li>Une chaîne publique propre, vision-essai, repartie de zéro, sans répartition ni prix : c'est elle que montre l'explorateur.</li>
+          </ul>
+          <p class="preuve"><a href="explorateur/">Voir la chaîne publique dans l'explorateur</a></p>
+        </li>
+        <li class="fait">
+          <div class="quand"><span class="date">Phase 2, 2 novembre 2026, version 0.5.1</span><span class="statut">Fait</span></div>
+          <h3>Le nœud et le portefeuille</h3>
+          <ul>
+            <li>Un installateur en un fichier, deux clés créées sur la machine, le rejeu complet de la chaîne.</li>
+            <li>Des pairs sur le réseau local, et un miroir public pour les nœuds qui viennent de l'extérieur.</li>
+            <li>La connexion au portefeuille par adresse, la demande d'inscription déposée en ticket.</li>
+            <li>Un vérificateur indépendant qui rejoue la chaîne sans le code du nœud, et cet explorateur.</li>
+          </ul>
+          <p class="preuve"><a href="https://github.com/Turbo31150/vision">Lire le code</a></p>
+        </li>
+        <li class="prochain">
+          <div class="quand"><span class="date">Phase 3, date à fixer</span><span class="statut">Prochain</span></div>
+          <h3>La première clôture d'époque</h3>
+          <ul>
+            <li>Le budget de la semaine se partage entre les nœuds au prorata du travail vérifié et des vérifications signées.</li>
+            <li>Chaque nœud recalcule la clôture et refuse un résultat qui ne correspond pas.</li>
+            <li>Elle n'aura lieu qu'avec la protection contre le rejeu et des reçus vérifiables par tous. D'ici là, les récompenses restent calculées en simulation.</li>
+          </ul>
+        </li>
+        <li class="prochain">
+          <div class="quand"><span class="date">Phase 4, ensuite</span><span class="statut">À construire</span></div>
+          <h3>Un réseau ouvert</h3>
+          <ul>
+            <li>Des témoins tenus par d'autres propriétaires, pour que la machine principale ne soit plus seule à faire foi. Les points de contrôle au format standard C2SP et la rotation de la clé d'un témoin sont écrits et testés, mais pas encore en service.</li>
+            <li>Une protection contre le rejeu d'une transaction déjà scellée : écrite et testée, pas encore publiée dans ce dépôt.</li>
+            <li>Le chiffrement du transport entre nœuds, et la traversée des box internet.</li>
+            <li>Un miroir découpé pour les longues chaînes, et une alerte quand une copie vieillit.</li>
+            <li>L'inscription des nœuds sans intervention manuelle.</li>
+          </ul>
+        </li>
+        <li class="conditionnel">
+          <div class="quand"><span class="date">Phase 5, sans date</span><span class="statut">Conditionnel</span></div>
+          <h3>L'usage réel</h3>
+          <ul>
+            <li>Un usage réel ne s'envisage que si les conditions réglementaires sont réunies et prouvées.</li>
+            <li>D'ici là, rien n'est en vente et les unités restent des unités d'essai.</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="rejoindre">
+    <div class="cadre">
+      <h2>Rejoindre le réseau</h2>
+      <p class="chapeau">Il faut Linux, Python 3.10 ou plus récent et <code>ssh-keygen</code> (paquet openssh-client). Tout s'installe dans votre dossier personnel.</p>
+      <ol class="etapes">
+        <li>Téléchargez l'installateur et vérifiez son empreinte.
 <pre>curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
 curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
 sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
-    <li>Lisez-le (c'est un script shell suivi d'une archive du code de ce dépôt), puis lancez-le :
+        <li>Lisez-le : c'est un script shell suivi d'une archive du code de ce dépôt. Puis lancez-le.
 <pre>bash installer-noeud-vision.sh --nom mon-noeud</pre></li>
-    <li>Ouvrez le portefeuille : <code>http://127.0.0.1:8861/</code> (ou l'icône « VISION Portefeuille » du menu). Le nœud lit la chaîne sur ce site et la rejoue.</li>
-    <li>Onglet <b>Nœud</b> → <b>Préparer ma demande d'inscription</b> : la transaction, signée par la clé de votre nœud, s'ouvre en ticket sur le dépôt. Elle ne contient que des données publiques. Le producteur l'importe ; votre nœud entre alors au registre, rattaché à votre portefeuille.</li>
-  </ol>
-  <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code> (vos clés restent dans <code>~/.local/share/vision-noeud</code>).</p>
+        <li>Ouvrez le portefeuille sur <code>http://127.0.0.1:8861/</code>, ou par l'icône « VISION Portefeuille » du menu. Le nœud lit la chaîne sur ce site et la rejoue.</li>
+        <li>Dans l'onglet Nœud, préparez votre demande d'inscription. La transaction, signée par la clé de votre nœud, ne contient que des données publiques et s'ouvre en ticket sur le dépôt. Une fois importée par le producteur, votre nœud entre au registre, rattaché à votre portefeuille.</li>
+      </ol>
+      <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code>. Vos clés restent dans <code>~/.local/share/vision-noeud</code>.</p>
+    </div>
+  </section>
 
-  <h2>Ce que VISION n'est pas</h2>
-  <div class="grille trois">
-    <div class="carte"><h3>Pas une monnaie</h3><p>Les unités ne se transfèrent pas d'un compte à l'autre et n'ont aucune valeur : il n'y a rien à échanger.</p></div>
-    <div class="carte"><h3>Pas une vente</h3><p>Aucune unité n'est vendue ni offerte au public. Aucune promesse de gain, de prix ou de rendement.</p></div>
-    <div class="carte"><h3>Pas un accès à votre machine</h3><p>Un pair ne peut rien faire exécuter sur votre machine : le réseau n'échange que des blocs et des transactions signés.</p></div>
-  </div>
+  <section class="section">
+    <div class="cadre deux-col">
+      <div>
+        <h2>Ce que VISION n'est pas</h2>
+        <ul class="sobre">
+          <li><b>Pas une monnaie.</b> Les unités ne passent pas d'un compte à l'autre et n'ont aucune valeur : il n'y a rien à échanger.</li>
+          <li><b>Pas une vente.</b> Aucune unité n'est vendue ni offerte. Aucune promesse de gain, de prix ou de rendement.</li>
+          <li><b>Pas un accès à votre machine.</b> Un pair ne peut rien y faire exécuter : le réseau n'échange que des blocs et des transactions signés.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Limites connues</h2>
+        <ul class="sobre">
+          <li><b>Un seul producteur.</b> La machine principale signe tous les blocs ; il n'y a pas encore de consensus distribué.</li>
+          <li><b>Un transport en clair.</b> Les blocs et les transactions sont signés, mais les échanges entre nœuds ne sont pas chiffrés.</li>
+          <li><b>Pas d'audit indépendant.</b> Une relecture contradictoire a relevé des faiblesses : le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Les correctifs sont testés mais pas encore publiés ici. La chaîne publique ne contient à ce jour aucune dépense.</li>
+          <li><b>Une mesure approchée.</b> Compter des secondes de calcul reste une mesure approchée du travail. Les critiques sont bienvenues, en ticket sur le dépôt.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
-  <h2>Feuille de route</h2>
-  <ul class="route">
-    <li><b class="fait">Fait</b> Chaîne d'essai signée, nœud, installateur en un fichier, portefeuille de bureau avec connexion par adresse, partage de puissance mesuré sur 3 machines et 6 GPU, règles de récompense par époque, explorateur public.</li>
-    <li><b class="prochain">04/11</b> Première clôture d'époque, recalculée par chaque nœud.</li>
-    <li><b class="prochain">Ensuite</b> Témoins tenus par d'autres propriétaires, chiffrement du transport entre nœuds, traversée des box (NAT), inscription des nœuds sans intervention manuelle.</li>
-  </ul>
-
-  <h2>Limites connues</h2>
-  <div class="carte">
-    <p>Un seul producteur de blocs (preuve d'autorité). Aucun audit externe à ce jour. Le transport entre nœuds n'est pas chiffré (les blocs, eux, sont signés). Compter des secondes de calcul reste une mesure approchée de la valeur du travail. Les critiques sont bienvenues : ouvrez un ticket sur le dépôt.</p>
-  </div>
+  <section class="section" id="boutique">
+    <div class="cadre">
+      <h2>Les packs de connaissances</h2>
+      <p class="chapeau">Les packs de connaissances tirés du même parc sont vendus à part, sur la boutique : scripts commentés, notes d'exploitation et incidents avec leur règle, au format JSONL, sources et empreintes sha256 dans chaque archive. Les deux sont séparés : un pack ne donne aucune unité, et les unités du réseau ne s'achètent pas.</p>
+      <a class="bouton" href="https://turbo-os.systeme.io/turbo-os">Voir la boutique</a>
+    </div>
+  </section>
 </main>
-<footer>VISION · réseau d'essai · code et données publiés sur <a href="https://github.com/Turbo31150/vision">github.com/Turbo31150/vision</a></footer>
+
+<footer class="pied">
+  <div class="cadre">
+    <span>VISION, réseau d'essai.</span>
+    <a href="https://github.com/Turbo31150/vision">Code et données sur GitHub</a>
+    <span>Unité affichée VISION-essai ; l'identifiant gravé dans les blocs reste vision-essai.</span>
+  </div>
+</footer>
 </body>
 </html>

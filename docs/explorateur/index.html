@@ -5,51 +5,108 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VISION · explorateur de la chaîne d'essai</title>
 <link rel="icon" href="../icone.svg">
+<link rel="preload" href="../polices/UbuntuSans-variable.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="../style.css">
+<script defer src="../ruban.js"></script>
 <script defer src="explorateur.js"></script>
 </head>
 <body>
-<header class="haut">
-  <a class="marque" href="../"><img src="../icone.svg" alt="" width="26" height="26"><span>VISION <b>Explorateur</b></span></a>
-  <nav class="liens">
-    <a href="../">Le projet</a>
-    <a class="actif" href="./">Explorateur</a>
-    <a href="../#rejoindre">Rejoindre</a>
-    <a href="https://github.com/Turbo31150/vision">Code</a>
-  </nav>
+<header class="entete">
+  <div class="cadre">
+    <a class="marque" href="../"><img src="../icone.svg" alt="" width="30" height="30">VISION</a>
+    <nav class="liens" aria-label="Navigation principale">
+      <a href="../">Le projet</a>
+      <a href="./" aria-current="page">Explorateur</a>
+      <a href="../#feuille-de-route">Feuille de route</a>
+      <a href="../#rejoindre">Rejoindre</a>
+      <a href="../#boutique">Boutique</a>
+      <a href="https://github.com/Turbo31150/vision">Code</a>
+    </nav>
+  </div>
 </header>
-<main class="page">
-  <div class="bandeau">Chaîne d'ESSAI : les unités n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
+<div class="essai"><div class="cadre">Réseau d'essai : les unités VISION-essai n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div></div>
 
-  <h1>La chaîne, bloc par bloc</h1>
-  <p class="sous">Copie publique de la chaîne d'essai, signatures comprises. Connectez-vous avec l'adresse d'un portefeuille ou d'un nœud pour voir son compte : solde, forfait d'essai, dépenses, matériel partagé et unités reçues.</p>
-
-  <form class="recherche" id="form" role="search">
-    <input id="q" type="text" spellcheck="false" autocomplete="off" placeholder="Adresse te1…, nom de nœud, n° de bloc ou identifiant de transaction" aria-label="Recherche">
-    <button class="bouton primaire" type="submit">Se connecter / chercher</button>
-  </form>
-  <div id="message" class="message" hidden></div>
-
-  <section id="compte" hidden>
-    <h2 id="compte-titre">Compte</h2>
-    <p class="vide mono" id="compte-adresse"></p>
-    <div class="kpis" id="compte-kpis"></div>
-    <div class="grille" style="margin-top:14px">
-      <div class="carte"><h3>Forfaits d'essai</h3><div id="compte-forfaits"></div></div>
-      <div class="carte"><h3>Nœuds et matériel partagé</h3><div id="compte-noeuds"></div></div>
+<main>
+  <section class="heros">
+    <div class="cadre">
+      <h1>La chaîne VISION, bloc par bloc.</h1>
+      <p>Une copie publique de la chaîne d'essai, signatures comprises. Connectez-vous avec l'adresse d'un portefeuille ou d'un nœud pour lire son compte.</p>
+      <form class="connexion" id="form" role="search">
+        <input id="q" type="text" spellcheck="false" autocomplete="off" aria-label="Adresse, nœud, bloc ou transaction" placeholder="Adresse te1…, nom de nœud, numéro de bloc ou identifiant de transaction">
+        <button class="bouton principal" type="submit">Se connecter</button>
+      </form>
+      <div id="message" class="message" hidden></div>
     </div>
-    <div class="carte" style="margin-top:14px"><h3>Opérations</h3><div id="compte-historique"></div></div>
   </section>
 
-  <h2>Le réseau</h2>
-  <div class="kpis" id="kpis"></div>
-  <p class="vide" id="date"></p>
-  <div class="carte" style="margin-top:14px"><h3>Nœuds inscrits</h3><div id="noeuds"></div></div>
-  <div class="carte" style="margin-top:14px"><h3>Époque en cours <span class="badge" id="epoque-badge"></span></h3><div id="epoque"></div></div>
+  <section class="ruban-zone" aria-labelledby="titre-ruban">
+    <div class="cadre">
+      <div class="ruban-tete">
+        <h2 id="titre-ruban">Les blocs</h2>
+        <p id="ruban-info">Lecture de la copie publique…</p>
+      </div>
+      <div class="ruban" id="ruban" role="list" aria-label="Blocs de la chaîne d'essai"></div>
+      <div class="legende" id="legende"></div>
+      <ul class="chiffres" id="chiffres"></ul>
+      <p class="date-mesure" id="date"></p>
+    </div>
+  </section>
 
-  <h2>Blocs</h2>
-  <div id="blocs"></div>
+  <section class="section" id="compte" hidden>
+    <div class="cadre">
+      <div class="releve">
+        <h2 id="compte-titre">Compte</h2>
+        <p class="adresse" id="compte-adresse"></p>
+        <div class="solde-grand"><span id="compte-solde">0</span><small>VISION-essai</small></div>
+        <ul class="chiffres" id="compte-chiffres"></ul>
+        <div class="deux-col">
+          <div><h3>Forfaits d'essai</h3><div id="compte-forfaits"></div></div>
+          <div><h3>Nœuds et matériel partagé</h3><div id="compte-noeuds"></div></div>
+        </div>
+        <h3>Opérations sur la chaîne</h3>
+        <div id="compte-historique"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="cadre deux-col">
+      <div>
+        <h2>Époque en cours</h2>
+        <p class="vide" id="epoque-fenetre"></p>
+        <div class="progression" aria-hidden="true"><span id="epoque-barre"></span></div>
+        <p class="vide" id="epoque-reste"></p>
+        <div id="epoque"></div>
+      </div>
+      <div>
+        <h2>Nœuds inscrits</h2>
+        <div id="noeuds"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="cadre">
+      <h2>Comptes</h2>
+      <p class="chapeau">Portefeuilles et nœuds connus de la chaîne. Les soldes de nœud sont des récompenses non dépensables ; les réserves ne sont pas listées.</p>
+      <div id="comptes"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="cadre">
+      <h2>Registre des blocs</h2>
+      <p class="chapeau">Du plus récent au plus ancien. Chaque ligne s'ouvre sur ses transactions.</p>
+      <div class="registre" id="blocs"></div>
+    </div>
+  </section>
 </main>
-<footer>Données : <a href="../chaine/blocs.json">blocs.json</a> · <a href="../chaine/bloc0.json">bloc0.json</a> · <a href="../chaine/etat.json">etat.json</a> · <a href="../chaine/info.json">info.json</a>. Un nœud les rejoue et les vérifie lui-même.</footer>
+
+<footer class="pied">
+  <div class="cadre">
+    <span>Données : <a href="../chaine/blocs.json">blocs.json</a>, <a href="../chaine/bloc0.json">bloc0.json</a>, <a href="../chaine/etat.json">etat.json</a>, <a href="../chaine/info.json">info.json</a>.</span>
+    <span>Un nœud les rejoue et les vérifie lui-même. L'identifiant gravé dans les blocs reste vision-essai.</span>
+  </div>
+</footer>
 </body>
 </html>

@@ -3,7 +3,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const fr = new Intl.NumberFormat('fr-FR');
-  let vue = 'apercu', donnees = {};
+  let vue = 'apercu', donnees = {}, dernierRuban = null;
   const TYPES = { allocation: 'Allocation', achat: 'Achat d’essai', depense: 'Dépense', recompense: 'Récompense', inscription: 'Inscription',
     regles: 'Règles', epoque: 'Clôture d’époque', catalogue: 'Catalogue', forfait: 'Forfait d’essai', consommation: 'Consommation',
     cle_producteur: 'Clé des blocs' };
@@ -48,7 +48,7 @@
       ['Détail', (t) => t.service || t.facture || t.motif || (t.mission ? `${t.mission} / ${t.etape}` : '') || t.adresse || ''],
       ['Id', (t) => el('code', {}, court(t.id, 10))]], b.transactions));
     detail.hidden = !ouvert;
-    return el('div', { class: 'bloc' },
+    return el('div', { class: 'bloc', 'data-h': String(b.hauteur) },
       el('div', { class: 'bloc-tete', onclick: () => { detail.hidden = !detail.hidden; } },
         el('span', { class: 'h' }, `#${b.hauteur}`), el('code', {}, court(b.empreinte, 16)),
         el('span', {}, `${b.transactions.length} tx`), el('span', { class: 'detruit' }, `${fr.format(b.detruit || 0)} détruites (cumul)`),
@@ -59,7 +59,7 @@
     const ok = e.synchro === 'à jour';
     $('pastille-synchro').className = `pastille ${ok ? 'ok' : 'attente'}`;
     $('pastille-reseau').className = `pastille ${ok ? 'ok' : 'attente'}`;
-    $('nom-reseau').textContent = e.nom_reseau ? `${e.nom_reseau} · essai` : e.reseau;
+    $('nom-reseau').textContent = e.nom_reseau ? `${e.nom_reseau}-essai` : e.reseau;
     $('etat-synchro').textContent = ok ? 'Synchronisé' : `Synchronisation (${e.hauteur}/${e.hauteur_pairs})`;
     $('etat-hauteur').textContent = `hauteur ${e.hauteur}`;
     $('etat-pairs').textContent = `${e.pairs.filter((p) => p.vu && !p.erreur).length}/${e.pairs.length} pair(s)`;
@@ -87,6 +87,22 @@
       ['Nœuds inscrits', (e.noeuds || []).length, '']].map(([l, v, c]) => el('div', { class: `kpi ${c}` },
       el('div', { class: 'val' }, String(v)), el('div', { class: 'lib' }, l))));
     vider($('apercu-blocs'), (donnees.blocs || []).slice(0, 4).map((b) => bloc(b, false)));
+    const teteRuban = (donnees.blocs || [])[0]?.empreinte;
+    if (window.VisionRuban && teteRuban && teteRuban !== dernierRuban) {   // redessiné seulement quand un bloc arrive
+      dernierRuban = teteRuban;
+      window.VisionRuban.dessiner($('ruban-apercu'), donnees.blocs, { clic: (x) => ouvrirBloc(x.hauteur) });
+      window.VisionRuban.legende($('legende-apercu'));
+    }
+  }
+
+  function ouvrirBloc(h) {
+    document.querySelector('#onglets button[data-vue="blocs"]')?.click();
+    const cible = document.querySelector(`#blocs .bloc[data-h="${CSS.escape(String(h))}"]`);
+    if (!cible) return;
+    document.querySelectorAll('#blocs .bloc.cible').forEach((x) => x.classList.remove('cible'));
+    cible.classList.add('cible');
+    const det = cible.querySelector('.bloc-detail'); if (det) det.hidden = false;
+    cible.scrollIntoView({ block: 'center' });
   }
 
   function rendrePortefeuille() {
@@ -113,7 +129,7 @@
     const ORIGINE = { recompense: 'reçu de vérification (v1)', depense: 'dépense servie (v1)', epoque: 'fin d’époque' };
     vider($('gains'), tableau([['Bloc', (g) => `#${g.hauteur}`], ['Origine', (g) => ORIGINE[g.type] || g.type],
       ['Unités', (g) => `+${fr.format(g.unites)}`, 'num plus'], ['Détail', (g) => g.detail || ''], ['Voie', (g) => g.voie || '']], z.gains,
-    'Pas encore de gain pour ce nœud.'));
+    'Aucune unité reçue pour ce nœud.'));
     vider($('classement'), tableau([['Nœud', (x) => x[0]], ['Unités reçues', (x) => fr.format(x[1]), 'num']], z.classement, 'Aucun nœud rémunéré.'));
     rendreEpoque();
   }

@@ -6,6 +6,7 @@
 <title>VISION · Portefeuille</title>
 <link rel="icon" href="icone.svg">
 <link rel="stylesheet" href="app.css">
+<script defer src="ruban.js"></script>
 <script defer src="app.js"></script>
 </head>
 <body>
@@ -20,14 +21,19 @@
     <button data-vue="blocs">Blocs</button>
     <button data-vue="noeud">Nœud</button>
   </nav>
-  <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION · essai</span></div>
+  <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION-essai</span></div>
 </header>
 
 <main>
-  <div class="bandeau-essai">Chaîne d'ESSAI : unités sans valeur, rien n'est vendu ni offert au public. Aucun achat réel.</div>
+  <div class="bandeau-essai">Réseau d'essai : les unités VISION-essai n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
 
   <section id="vue-apercu" class="vue actif">
     <div class="grille-kpi" id="kpis"></div>
+    <div class="carte">
+      <h2>La chaîne, bloc par bloc</h2>
+      <div class="ruban" id="ruban-apercu" role="list" aria-label="Derniers blocs de la chaîne"></div>
+      <div class="legende-ruban" id="legende-apercu"></div>
+    </div>
     <div class="deux">
       <div class="carte">
         <h2>Comment circule une unité</h2>
@@ -108,7 +114,7 @@
         <div id="message-inscription" class="message" hidden></div>
       </div>
       <div class="carte">
-        <h2>Gains du nœud <span id="solde-noeud" class="badge"></span></h2>
+        <h2>Unités reçues par le nœud <span id="solde-noeud" class="badge"></span></h2>
         <div id="gains"></div>
       </div>
     </div>
@@ -158,7 +164,7 @@
   <span id="etat-pairs"></span>
   <span id="etat-role"></span>
   <span id="etat-version"></span>
-  <span class="droite">ESSAI · sans valeur</span>
+  <span class="droite">VISION-essai, sans valeur</span>
 </footer>
 </body>
 </html>

@@ -1,40 +1,51 @@
-/* Chiffres vivants et parc de la page projet, lus dans chaine/etat.json (miroir public). Texte toujours par textContent. */
+/* VISION · page projet : ruban de la chaîne, chiffres vivants et parc, lus dans la copie publique (chaine/). */
 (() => {
   'use strict';
   const fr = new Intl.NumberFormat('fr-FR');
+  const $ = (id) => document.getElementById(id);
   const el = (tag, cls, texte) => { const n = document.createElement(tag); if (cls) n.className = cls; if (texte != null) n.textContent = texte; return n; };
-  const kpi = (lib, val, cls) => { const d = el('div', `kpi ${cls || ''}`); d.append(el('div', 'val', val), el('div', 'lib', lib)); return d; };
   const go = (mo) => `${Math.round((mo || 0) / 1024)} Go`;
+  const heure = (iso) => { try { return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }); } catch { return iso || ''; } };
+
+  function chiffre(libelle, valeur, cls) {
+    const li = el('li'); li.append(el('b', cls || '', String(valeur)), el('span', null, libelle)); return li;
+  }
 
   function parc(e) {
-    const actifs = Object.fromEntries((e.reseau.noeuds || []).map((n) => [n.nom, n]));
-    const t = el('table'); const th = el('thead'); const tr = el('tr');
-    ['Nœud', 'État', 'Matériel partagé', 'Reçu'].forEach((c) => tr.append(el('th', null, c)));
-    th.append(tr); t.append(th);
+    const parNom = Object.fromEntries((e.reseau.noeuds || []).map((n) => [n.nom, n]));
+    const t = el('table'); const tete = el('tr');
+    ['Nœud', 'État', 'Matériel partagé', 'Reçu (VISION-essai)'].forEach((c) => tete.append(el('th', null, c)));
+    const th = el('thead'); th.append(tete); t.append(th);
     const tb = el('tbody');
     for (const n of e.inscrits) {
-      const r = actifs[n.noeud] || {}; const m = r.materiel;
+      const r = parNom[n.noeud] || {}; const m = r.materiel;
       const l = el('tr');
       l.append(el('td', null, n.noeud));
-      const td = el('td'); td.append(el('span', `badge ${r.actif ? 'ok' : ''}`, r.actif ? 'actif' : 'hors ligne')); l.append(td);
-      l.append(el('td', null, m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(' / ') || 'sans GPU'} · ${m.cpu_coeurs} cœurs · ${go(m.ram_mo)}` : '—'));
-      l.append(el('td', 'num plus', fr.format(e.soldes[`noeud:${n.noeud}`] || 0)));
+      const td = el('td'); td.append(el('span', `etat ${r.actif ? 'actif' : 'hors'}`, r.actif ? 'en ligne' : 'hors ligne')); l.append(td);
+      l.append(el('td', null, m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(', ') || 'sans carte graphique'} ; ${m.cpu_coeurs} cœurs ; ${go(m.ram_mo)} de mémoire` : 'aucune annonce reçue'));
+      l.append(el('td', 'num c-sarcelle', fr.format(e.soldes[`noeud:${n.noeud}`] || 0)));
       tb.append(l);
     }
     t.append(tb);
-    document.getElementById('parc').replaceChildren(e.inscrits.length ? t : el('p', 'vide', 'Aucun nœud inscrit pour l’instant.'));
+    $('parc').replaceChildren(e.inscrits.length ? t : el('p', 'vide', 'Aucun nœud inscrit pour l’instant.'));
   }
 
-  fetch('chaine/etat.json', { cache: 'no-store' }).then((r) => r.json()).then((e) => {
+  Promise.all([fetch('chaine/blocs.json', { cache: 'no-store' }).then((r) => r.json()),
+    fetch('chaine/etat.json', { cache: 'no-store' }).then((r) => r.json())]).then(([b, e]) => {
+    const blocs = b.blocs;
+    const tete = blocs[blocs.length - 1];
+    window.VisionRuban.dessiner($('ruban'), blocs, { lien: (x) => `explorateur/#${x.hauteur}` });
+    window.VisionRuban.legende($('legende'));
+    $('ruban-info').textContent = `${blocs.length} blocs signés, dernier bloc ${tete.empreinte.slice(0, 12)}, scellé le ${heure(tete.horodatage)}.`;
     const t = e.reseau.total;
-    document.getElementById('kpis').replaceChildren(
-      kpi('Machines en ligne', t.machines, 'cyan'), kpi('GPU partagés', t.gpus, 'vert'),
-      kpi('VRAM cumulée', `${String(t.vram_go).replace('.', ',')} Go`, 'vert'), kpi('Nœuds inscrits', e.inscrits.length, ''),
-      kpi('Hauteur de la chaîne', e.hauteur, ''), kpi('Unités détruites', fr.format(e.soldes.detruit || 0), 'rouge'));
-    document.getElementById('kpis-date').textContent = `Mesuré par le nœud producteur le ${new Date(e.genere_le).toLocaleString('fr-FR')}.`;
+    $('chiffres').replaceChildren(
+      chiffre('machines en ligne', t.machines, 'c-sarcelle'), chiffre('cartes graphiques', t.gpus),
+      chiffre('de mémoire graphique', `${String(t.vram_go).replace('.', ',')} Go`), chiffre('nœuds inscrits', e.inscrits.length),
+      chiffre('transactions', e.transactions), chiffre('unités détruites', fr.format(e.soldes.detruit || 0), 'c-corail'));
+    $('date-mesure').textContent = `Copie publiée par le nœud producteur le ${heure(e.genere_le)}. Une machine hors ligne n'est pas comptée.`;
     parc(e);
   }).catch(() => {
-    document.getElementById('kpis-date').textContent = 'Chiffres indisponibles pour le moment.';
-    document.getElementById('parc').replaceChildren(el('p', 'vide', 'Parc indisponible pour le moment.'));
+    $('ruban-info').textContent = 'Copie publique illisible pour le moment.';
+    $('parc').replaceChildren(el('p', 'vide', 'Parc indisponible pour le moment.'));
   });
 })();

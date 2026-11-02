@@ -58,20 +58,53 @@ installateur/construire-installateur
 cat docs/installer-noeud-vision.sh.sha256
 ```
 
-## Comment ça marche
+## Comment ça marche, pas à pas
 
-- **Blocs** : hauteur, empreinte du précédent, racine de Merkle des transactions, empreinte des soldes, signature du producteur (`ssh-keygen -Y`, espace dédié). Un nœud rejoue toute la chaîne avant d'accepter un bloc.
-- **Unités d'usage** : un service rendu par le réseau se règle par une dépense signée par le portefeuille ; 20 % sont détruits, 80 % reviennent à la réserve qui récompense les machines. Il n'existe aucune instruction de transfert entre comptes.
-- **Forfaits** : seules des factures d'essai `ESSAI-` sont acceptées : aucune somme n'est encaissée.
-- **Partage de puissance** : chaque nœud annonce lui-même sa machine (cartes, mémoire, cœurs, charge) ; les annonces sont vérifiées puis additionnées.
-- **Récompense** : par époque hebdomadaire (frontière le mercredi 12:00 UTC). Points de travail (secondes d'une étape validée par un reçu indépendant, doublées si le résultat est rejoué à l'identique) et points de validation (un par reçu signé). Le budget de l'époque se partage au prorata ; il est divisé par deux chaque année ; le reliquat reste en réserve.
+![Plusieurs ordinateurs reliés autour d'une pile de blocs translucides](docs/images/reseau.jpg)
+*Illustration générée par IA (Mistral).*
+
+**1. Des machines ordinaires, reliées.** Un PC de bureau ou un portable sous Linux, avec ou sans carte graphique, suffit. Chaque machine installe un nœud : il garde une copie de la chaîne, parle aux autres nœuds et sert le portefeuille. Une seule machine, le producteur, signe aujourd'hui les blocs ; les autres rejouent tout ce qu'il publie au lieu de le croire.
+
+![Un ordinateur qui garde deux clés lumineuses, entouré de blocs](docs/images/noeud-cles.jpg)
+*Illustration générée par IA (Manus).*
+
+**2. Installer : un fichier, deux clés qui ne sortent jamais.** L'installateur crée deux clés ed25519 dans `~/.local/share/vision-noeud`, une pour le nœud et une pour le portefeuille. Le portefeuille n'est servi que sur la machine (`http://127.0.0.1:8861/`) : personne d'autre ne peut l'ouvrir ni signer à votre place.
+
+![Capture de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
+*Capture réelle de l'explorateur.*
+
+**3. Rejouer toute la chaîne avant d'y croire.** Le nœud récupère la chaîne chez ses pairs du réseau local ou sur le miroir public, puis la rejoue depuis le bloc 0. Pour chaque bloc, il vérifie la hauteur, l'empreinte du bloc précédent, la racine de Merkle des transactions, l'empreinte des soldes et la signature du producteur (`ssh-keygen -Y`, espace dédié), avec la clé épinglée dans l'installateur. Au premier écart, la copie est refusée.
+
+![Les cartes graphiques de plusieurs machines réunissent leur puissance](docs/images/puissance.jpg)
+*Illustration générée par IA (Mistral).*
+
+**4. Mettre la puissance en commun.** Chaque nœud annonce sa machine (cartes, mémoire, cœurs, charge), signée par sa clé. Les annonces sont vérifiées puis additionnées ; une machine n'est comptée en ligne que si elle a répondu dans les deux dernières minutes. VISION n'exécute rien lui-même : les modèles d'IA tournent sur les machines, VISION recense la puissance et inscrit les preuves du travail fait.
+
+![Deux ordinateurs face à face ; un reçu scellé passe de l'un à l'autre](docs/images/verification.jpg)
+*Illustration générée par IA (Manus).*
+
+**5. Le travail d'une machine, vérifié par une autre.** Quand une machine termine une étape, une autre la rejoue et signe un reçu : réussi, échoué ou indéterminé. Sans reçu, pas de point.
+- Points de travail : les secondes de l'étape validée, doublées si le résultat est retrouvé à l'identique.
+- Points de vérification : un point par reçu signé, pour la machine qui a vérifié.
+- Par époque hebdomadaire (frontière le mercredi 12:00 UTC), le budget se partage au prorata des points et le reliquat reste en réserve. Ce budget est divisé par deux chaque année : c'est une règle de calcul, pas une promesse de gain.
+- Pour l'instant, les récompenses restent calculées en simulation.
+
+**6. Les unités d'essai.** Un service rendu par le réseau se règle par une dépense signée par le portefeuille : 20 % sont détruits, 80 % reviennent à la réserve qui récompense les machines. Il n'existe aucune instruction de transfert entre comptes. Seules des factures d'essai `ESSAI-` créditent des unités : aucune somme n'est encaissée.
 
 La vérification des reçus de travail s'appuie sur un module privé du producteur, qui n'est pas publié ici. Sans lui, un nœud vérifie tout le reste : liens, racines, signatures, soldes, règles et clôtures d'époque.
 
 ## Limites connues
 
-- Un seul producteur de blocs (preuve d'autorité) ; pas encore de témoin tenu par un autre propriétaire.
+- Un seul producteur de blocs (preuve d'autorité). Trois témoins répliquent le grand livre, mais ils tournent pour l'instant sur des machines du même propriétaire.
 - Transport entre nœuds en HTTP simple : les blocs et les transactions sont signés, le transport n'est pas chiffré. Pas de traversée de box (NAT) : hors du réseau local, un nœud lit le miroir public.
-- Aucun audit externe à ce jour.
+- Pas d'audit indépendant. Une relecture contradictoire a relevé des faiblesses, dont le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Les correctifs sont testés mais pas encore publiés ici. La chaîne publique ne contient à ce jour aucune dépense.
+- Compter des secondes de calcul reste une mesure approchée du travail.
+
+## Feuille de route
+
+- **Fait** : chaîne d'essai signée, nœud et installateur en un fichier, portefeuille de bureau avec connexion par adresse, partage de puissance, règles de récompense par époque, explorateur public, vérificateur indépendant.
+- **Prochain, date à fixer** : première clôture d'époque recalculée par chaque nœud, seulement avec la protection contre le rejeu et des reçus vérifiables par tous.
+- **À construire** : témoins tenus par d'autres propriétaires (points de contrôle au format C2SP et rotation de clé : écrits et testés, pas encore en service), chiffrement du transport, traversée des box, inscription sans intervention manuelle.
+- **Conditionnel** : un usage réel ne s'envisage que si les conditions réglementaires sont réunies et prouvées. D'ici là, rien n'est en vente.
 
 Les critiques et les questions sont bienvenues : ouvrez un ticket.
