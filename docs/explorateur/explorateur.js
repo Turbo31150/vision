@@ -5,7 +5,7 @@
   const fr = new Intl.NumberFormat('fr-FR');
   const ADRESSE = /^te1[0-9a-f]{40}$/;
   const DESTRUCTION = 20;
-  const TYPES = { allocation: 'Allocation', achat: 'Achat d’essai', depense: 'Dépense', recompense: 'Récompense', inscription: 'Inscription',
+  const TYPES = { allocation: 'Allocation', achat: 'Crédit d’essai (facture ESSAI-)', depense: 'Dépense', recompense: 'Récompense', inscription: 'Inscription',
     regles: 'Règles', epoque: 'Clôture d’époque', catalogue: 'Catalogue', forfait: 'Forfait d’essai', consommation: 'Consommation',
     cle_producteur: 'Clé des blocs' };
   let blocs = [], etat = null, delta = new Map();
