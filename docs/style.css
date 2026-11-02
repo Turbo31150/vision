@@ -323,3 +323,11 @@ ul.galerie li { margin: 0; }
 ul.galerie a { display: block; border: 1px solid var(--t-bord); border-radius: var(--t-rayon-lg); overflow: hidden; box-shadow: var(--t-ombre-2); transition: transform var(--t-duree-2) var(--t-courbe), border-color var(--t-duree-1); }
 ul.galerie a:hover { transform: translateY(-3px); border-color: var(--t-accent); }
 ul.galerie img { display: block; width: 100%; height: auto; }
+
+/* ── Bandeau cinéma : l'ombre et la lumière ── */
+figure.cinema { margin: 0; position: relative; background: #000; border-block: 1px solid var(--t-bord); }
+figure.cinema img { display: block; width: 100%; height: auto; max-height: 78vh; object-fit: cover; }
+figure.cinema figcaption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 48px max(24px, calc((100% - var(--large)) / 2 + 24px)) 18px; background: linear-gradient(transparent, rgba(4, 6, 10, .82)); }
+figure.cinema .devise { font: 700 clamp(20px, 2.4vw, 32px)/1.2 var(--sans); font-stretch: 75%; color: #e4e8ef; max-width: 32ch; }
+figure.cinema .credit { font-size: 13px; color: #abb4c4; }
+@media (max-width: 640px) { figure.cinema figcaption { position: static; background: var(--t-ruban-fond); padding: 14px 24px; } figure.cinema .devise { color: var(--t-texte); } figure.cinema .credit { color: var(--t-texte-2); } }

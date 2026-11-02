@@ -1,5 +1,7 @@
 ![VISION : le travail d'une machine, vérifié par une autre. Réseau d'essai, unités sans valeur, rien en vente.](docs/images/banniere.png)
 
+> *De l'ombre naît le travail. De la lumière naît la preuve.*
+
 # VISION · nœud, portefeuille et partage de puissance (réseau d'essai)
 
 > **Chaîne d'ESSAI.** Les unités n'ont aucune valeur, ne se transfèrent pas d'un compte à l'autre et ne sont ni vendues ni offertes au public.
@@ -76,8 +78,8 @@ cat docs/installer-noeud-vision.sh.sha256
 
 ## Comment ça marche, pas à pas
 
-![Plusieurs ordinateurs reliés autour d'une pile de blocs translucides](docs/images/reseau.jpg)
-*Illustration générée par IA (Mistral).*
+![Une tour, un portable et un petit boîtier reliés par des fils de lumière à une pile de blocs de verre](docs/images/reseau.jpg)
+*Illustration générée par IA (Manus).*
 
 **1. Des machines ordinaires, reliées.** Un PC de bureau ou un portable sous Linux, avec ou sans carte graphique, suffit. Chaque machine installe un nœud : il garde une copie de la chaîne, parle aux autres nœuds et sert le portefeuille. Une seule machine, le producteur, signe aujourd'hui les blocs ; les autres rejouent tout ce qu'il publie au lieu de le croire.
 
@@ -91,8 +93,8 @@ cat docs/installer-noeud-vision.sh.sha256
 
 **3. Rejouer toute la chaîne avant d'y croire.** Le nœud récupère la chaîne chez ses pairs du réseau local ou sur le miroir public, puis la rejoue depuis le bloc 0. Pour chaque bloc, il vérifie la hauteur, l'empreinte du bloc précédent, la racine de Merkle des transactions, l'empreinte des soldes et la signature du producteur (`ssh-keygen -Y`, espace dédié), avec la clé épinglée dans l'installateur. Au premier écart, la copie est refusée.
 
-![Les cartes graphiques de plusieurs machines réunissent leur puissance](docs/images/puissance.jpg)
-*Illustration générée par IA (Mistral).*
+![Trois cartes graphiques dont les filets de lumière se rejoignent en un halo](docs/images/puissance.jpg)
+*Illustration générée par IA (Manus).*
 
 **4. Mettre la puissance en commun.** Chaque nœud annonce sa machine (cartes, mémoire, cœurs, charge), signée par sa clé. Les annonces sont vérifiées puis additionnées ; une machine n'est comptée en ligne que si elle a répondu dans les deux dernières minutes. VISION n'exécute rien lui-même : les modèles d'IA tournent sur les machines, VISION recense la puissance et inscrit les preuves du travail fait.
 
@@ -114,6 +116,7 @@ La vérification des reçus de travail s'appuie sur un module privé du producte
 - Un seul producteur de blocs (preuve d'autorité). Trois témoins répliquent le grand livre, mais ils tournent pour l'instant sur des machines du même propriétaire.
 - Transport entre nœuds en HTTP simple : les blocs et les transactions sont signés, le transport n'est pas chiffré. Pas de traversée de box (NAT) : hors du réseau local, un nœud lit le miroir public.
 - Pas d'audit indépendant. Une relecture contradictoire a relevé des faiblesses, dont le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.
+- Un reçu signé prouve quelle machine déclare avoir rejoué une étape, pas que le calcul a eu lieu ; le rejeu par une autre machine n'est complet que pour les étapes déterministes.
 - Compter des secondes de calcul reste une mesure approchée du travail.
 
 ## Feuille de route

@@ -6,6 +6,12 @@
 <title>VISION · le travail d'une machine, vérifié par une autre</title>
 <meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et des points de travail calculés sur preuve, en simulation. Unités d'essai sans valeur, rien en vente.">
 <link rel="icon" href="icone.svg">
+<meta property="og:title" content="VISION · le travail d'une machine, vérifié par une autre">
+<meta property="og:description" content="Réseau d'essai open source : de l'ombre naît le travail, de la lumière naît la preuve. Unités sans valeur, rien en vente.">
+<meta property="og:image" content="https://turbo31150.github.io/vision/images/partage.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="polices/UbuntuSans-variable.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="style.css">
 <script defer src="ruban.js"></script>
@@ -57,6 +63,11 @@
       </figure>
     </div>
   </section>
+
+  <figure class="cinema">
+    <img src="images/heros.jpg" alt="Dans l'ombre, un treillis discret organise ; dans la lumière, deux anneaux, cyan et blanc, se croisent au-dessus d'une rangée de blocs de verre dont l'un s'allume." width="1920" height="960" fetchpriority="high">
+    <figcaption><span class="devise">De l'ombre naît le travail. De la lumière naît la preuve.</span><span class="credit">Illustration générée par IA (Manus).</span></figcaption>
+  </figure>
 
   <section class="ruban-zone" aria-labelledby="titre-ruban">
     <div class="cadre">
@@ -112,7 +123,7 @@
       <p class="chapeau">De l'installation au calcul des points : ce que fait chaque machine, et ce que vous pouvez vérifier vous-même.</p>
       <ol class="pas">
         <li>
-          <figure class="capture"><img src="images/reseau.jpg" alt="Plusieurs ordinateurs reliés par des lignes lumineuses autour d'une pile de blocs translucides." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
+          <figure class="capture"><img src="images/reseau.jpg" alt="Une tour, un portable et un petit boîtier, reliés par de fins fils de lumière cyan à une pile de blocs de verre éclairée d'en haut." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
             <h3>Des machines ordinaires, reliées</h3>
             <p>Un PC de bureau ou un portable sous Linux, avec ou sans carte graphique, suffit. Chaque machine installe un nœud : c'est lui qui garde une copie de la chaîne, parle aux autres nœuds et sert le portefeuille.</p>
@@ -120,7 +131,7 @@
           </div>
         </li>
         <li>
-          <figure class="capture" id="fig-cles"><img src="images/noeud-cles.jpg" alt="Un ordinateur de bureau qui garde deux petites clés lumineuses à l'intérieur, entouré de blocs translucides." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
+          <figure class="capture" id="fig-cles"><img src="images/noeud-cles.jpg" alt="Une tour de PC à paroi de verre ; à l'intérieur, près de la carte graphique, deux petites clés de lumière, une cyan et une blanche." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
             <h3>Installer : un fichier, deux clés gardées sur la machine</h3>
             <p>L'installateur est un script shell suivi d'une archive du code de ce dépôt. Il s'installe dans votre dossier personnel, sans droits d'administrateur, et crée deux clés ed25519 : une pour le nœud, une pour le portefeuille. Elles restent dans <code>~/.local/share/vision-noeud</code>.</p>
@@ -128,7 +139,7 @@
           </div>
         </li>
         <li>
-          <figure class="capture"><img src="images/explorateur.jpg" alt="Capture de l'explorateur VISION : deux blocs, la légende des types de transaction et les chiffres du réseau." width="1200" height="725" loading="lazy"><figcaption>Capture réelle de l'explorateur, chaîne publique vision-essai.</figcaption></figure>
+          <figure class="capture"><img src="images/rejouer.jpg" alt="Une longue file de blocs de verre ; un fin faisceau blanc les relit un à un, les premiers portent un liseré vert." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
             <h3>Rejouer toute la chaîne avant d'y croire</h3>
             <p>Le nœud récupère la chaîne chez ses pairs du réseau local, ou sur la copie publique de ce site. Il la rejoue depuis le bloc 0. Pour chaque bloc, il vérifie :</p>
@@ -142,7 +153,7 @@
           </div>
         </li>
         <li>
-          <figure class="capture" id="fig-puissance"><img src="images/puissance.jpg" alt="Les cartes graphiques de trois ordinateurs réunissent leur puissance en un seul flux lumineux vers un cœur d'IA locale." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
+          <figure class="capture" id="fig-puissance"><img src="images/puissance.jpg" alt="Trois cartes graphiques côte à côte ; de chacune monte un filet de lumière cyan, et les trois se rejoignent en un seul halo." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
             <h3>Mettre la puissance en commun</h3>
             <p>Chaque nœud annonce sa machine : cartes graphiques, mémoire, cœurs, charge. L'annonce est signée par la clé du nœud, puis additionnée aux autres. La signature prouve quel nœud l'a faite, pas que le matériel déclaré existe : aucune attestation matérielle n'est encore en place. L'explorateur ne compte une machine en ligne que si elle a répondu dans les deux dernières minutes.</p>
@@ -150,7 +161,7 @@
           </div>
         </li>
         <li>
-          <figure class="capture" id="fig-verification"><img src="images/verification.jpg" alt="Deux ordinateurs face à face ; un reçu scellé passe de l'un à l'autre." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
+          <figure class="capture" id="fig-verification"><img src="images/verification.jpg" alt="Deux postes face à face, l'un dans l'ombre cyan, l'autre dans la lumière blanche ; entre eux, une carte de verre scellée de vert, sous deux anneaux qui se croisent." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
             <h3>Le travail d'une machine, vérifié par une autre</h3>
             <p>Quand une machine termine une étape de travail, une autre machine la rejoue et signe un reçu : réussi, échoué ou indéterminé. Sans reçu, pas de point.</p>
@@ -163,7 +174,8 @@
           </div>
         </li>
         <li>
-          <div class="pas-texte pas-large">
+          <figure class="capture"><img src="images/explorateur.jpg" alt="Capture de l'explorateur VISION : deux blocs, la légende des types de transaction et les chiffres du réseau." width="1200" height="725" loading="lazy"><figcaption>Capture réelle de l'explorateur, chaîne publique vision-essai.</figcaption></figure>
+          <div class="pas-texte">
             <h3>Vérifier sans nous croire</h3>
             <p>L'explorateur montre les blocs, les transactions, les nœuds et les comptes, signatures comprises. Pour aller plus loin, le dépôt fournit un vérificateur indépendant qui rejoue toute la chaîne sans utiliser le code du nœud. Il ne demande que Python 3.10 et <code>ssh-keygen</code> :</p>
 <pre>git clone https://github.com/Turbo31150/vision && cd vision
@@ -306,6 +318,7 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
         <h2>Limites connues</h2>
         <ul class="sobre">
           <li><b>Un seul producteur.</b> La machine principale signe tous les blocs et importe les demandes d'inscription des nœuds ; il n'y a pas encore de consensus distribué. Les trois témoins du grand livre copient et contrôlent : ils ne produisent pas de blocs.</li>
+          <li><b>Une preuve partielle.</b> Un reçu signé prouve quelle machine déclare avoir rejoué une étape, pas que le calcul a eu lieu. Le rejeu par une autre machine n'est complet que pour les étapes déterministes.</li>
           <li><b>Du matériel déclaré.</b> Chaque nœud annonce lui-même ses cartes et sa charge ; rien ne l'atteste matériellement. Le temps de calcul déclaré peut être faussé.</li>
           <li><b>Un transport en clair.</b> Les blocs et les transactions sont signés, mais les échanges entre nœuds ne sont pas chiffrés.</li>
           <li><b>Pas d'audit indépendant.</b> Une relecture contradictoire a relevé des faiblesses : le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.</li>
