@@ -13,7 +13,7 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | **Site du projet** | <https://turbo31150.github.io/vision/> |
 | **Explorateur de blocs** (blocs, nœuds, connexion par adresse) | <https://turbo31150.github.io/vision/explorateur/> |
 | **Feuille de route** | <https://turbo31150.github.io/vision/#feuille-de-route> |
-| **Installer un nœud** | [Rejoindre](#rejoindre) |
+| **Installer un nœud** (Linux, Windows, macOS, Android) | <https://turbo31150.github.io/vision/installer/> · [Installer](#installer) |
 | **Vérifier la chaîne soi-même** | [Vérifier sans nous croire](#vérifier-sans-nous-croire) |
 
 **En bref**
@@ -33,9 +33,9 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | `noeud/vision-noeud` | Le nœud : rejoue et vérifie la chaîne, échange avec ses pairs, lit le miroir public, sert le portefeuille sur `127.0.0.1` |
 | `noeud/ui/` | Le portefeuille de bureau : solde, dépenses signées, compte par adresse, partage de puissance, réseau, blocs |
 | `chaine/vision-chaine` | Les règles de la chaîne : blocs signés, racines de Merkle, soldes, dépenses (20 % détruits), forfaits, époques de récompense |
-| `installateur/` | Le modèle de l'installateur et son constructeur reproductible |
+| `installateur/` | Les modèles des installateurs (bash : Linux, macOS, Android ; PowerShell : Windows) et leur constructeur reproductible |
 | `outils/exporter-chaine-publique` | Ce que le nœud producteur publie dans `docs/chaine/` (le miroir) |
-| `docs/` | Le site du projet, l'explorateur, le miroir de la chaîne et l'installateur |
+| `docs/` | Le site du projet, la page Installer, l'explorateur, le miroir de la chaîne et les installateurs |
 
 ## Vérifier sans nous croire
 
@@ -50,9 +50,18 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA..."
 
 Sans `--cle-origine`, la clé vient du même site que les blocs : cela prouve la cohérence, pas l'origine. Obtenez cette clé par un autre canal.
 
-## Rejoindre
+## Installer
 
-Il faut Linux, Python 3.10 ou plus récent et `ssh-keygen` (paquet openssh-client). Rien ne demande de droits d'administrateur.
+Un nœud et son portefeuille de bureau s'installent dans le dossier de l'utilisateur, sans droits d'administrateur. Il faut Python 3.10 ou plus récent et `ssh-keygen`. Deux installateurs, une seule archive de code, les mêmes valeurs épinglées (clé du producteur, bloc 0) : `installer-noeud-vision.sh` pour Linux, macOS et Android (Termux), `installer-noeud-vision.ps1` pour Windows. La page [Installer](https://turbo31150.github.io/vision/installer/) reprend ces commandes système par système.
+
+| Système | État |
+|---|---|
+| Linux | testé le 2 novembre 2026 (installation, lecture du miroir, chaîne rejouée) |
+| Windows 10 et 11 | non testé sur ce système |
+| macOS | non testé sur ce système |
+| Android (Termux) | non testé sur un téléphone |
+
+**Linux** (service `systemd --user`, icône « VISION Portefeuille » du menu) :
 
 ```bash
 curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
@@ -62,6 +71,35 @@ less installer-noeud-vision.sh            # un script shell, suivi d'une archive
 bash installer-noeud-vision.sh --nom mon-noeud
 ```
 
+**Windows 10 et 11**, dans PowerShell (Python depuis python.org ou le Microsoft Store, « Client OpenSSH » de Windows ; la comparaison doit afficher `True`). Le nœud tourne sans fenêtre (`pythonw`), une tâche planifiée le démarre à l'ouverture de session, un raccourci « VISION Portefeuille » est posé dans le menu Démarrer et sur le Bureau :
+
+```powershell
+curl.exe -LO https://turbo31150.github.io/vision/installer-noeud-vision.ps1
+curl.exe -LO https://turbo31150.github.io/vision/installer-noeud-vision.ps1.sha256
+(Get-FileHash .\installer-noeud-vision.ps1 -Algorithm SHA256).Hash -eq (Get-Content .\installer-noeud-vision.ps1.sha256).Split(' ')[0]
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installer-noeud-vision.ps1 -Nom mon-pc
+```
+
+**macOS** (Python 3.10 ou plus récent depuis python.org, puis « Install Certificates.command », ou `brew install python`). Un agent de session launchd démarre le nœud ; l'application « VISION Portefeuille » est posée dans `~/Applications` :
+
+```bash
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+shasum -a 256 -c installer-noeud-vision.sh.sha256
+bash installer-noeud-vision.sh --nom mon-mac
+```
+
+**Android, avec Termux** (Termux et Termux:Widget depuis F-Droid ou GitHub, pas depuis le Play Store). Le nœud tourne en arrière-plan ; le raccourci `~/.shortcuts/VISION Portefeuille` du widget le relance au besoin et ouvre le portefeuille :
+
+```bash
+pkg install python openssh curl
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+sha256sum -c installer-noeud-vision.sh.sha256
+bash installer-noeud-vision.sh --nom mon-telephone
+termux-wake-lock                          # Android n'arrête plus Termux en arrière-plan
+```
+
 Ensuite :
 
 1. Le portefeuille s'ouvre par l'icône « VISION Portefeuille » ou par la commande affichée à la fin de l'installation ; l'adresse `http://127.0.0.1:8861/` seule donne une lecture sans signature. Deux clés ed25519 ont été créées sur votre machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais.
@@ -69,15 +107,15 @@ Ensuite :
 3. Onglet **Mon compte** : connectez-vous avec une adresse (`te1…`) pour voir ce que la chaîne sait d'elle : solde, forfait d'essai, dépenses, nœuds rattachés, matériel partagé et unités reçues.
 4. Onglet **Nœud** → **Préparer ma demande d'inscription** : une transaction signée par la clé de votre nœud (données publiques seulement) s'ouvre en ticket sur ce dépôt. Le producteur l'importe et votre nœud entre au registre.
 
-Désinstaller : `bash installer-noeud-vision.sh --desinstaller` (les clés restent dans `~/.local/share/vision-noeud`).
+Désinstaller : `bash installer-noeud-vision.sh --desinstaller` sous Linux, macOS et Android ; `powershell -NoProfile -ExecutionPolicy Bypass -File .\installer-noeud-vision.ps1 -Desinstaller` sous Windows. Les clés restent (`~/.local/share/vision-noeud`, ou `%LOCALAPPDATA%\VISION\noeud` sous Windows).
 
 ### Vérifier l'installateur vous-même
 
-L'installateur se reconstruit à partir de ce dépôt ; la clé publique du producteur et l'empreinte du bloc 0 sont lues dans `docs/chaine/info.json` :
+Les deux installateurs se reconstruisent à l'identique à partir de ce dépôt, sous Linux ; la clé publique du producteur et l'empreinte du bloc 0 sont lues dans `docs/chaine/info.json` :
 
 ```bash
 installateur/construire-installateur
-cat docs/installer-noeud-vision.sh.sha256
+cat docs/installer-noeud-vision.sh.sha256 docs/installer-noeud-vision.ps1.sha256
 ```
 
 ## Comment ça marche, pas à pas

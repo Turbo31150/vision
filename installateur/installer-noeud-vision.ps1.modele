@@ -1,0 +1,288 @@
+<#
+Installateur du nœud VISION (réseau d'essai, chaîne VISION-essai) et de son portefeuille de bureau, pour Windows 10 et 11.
+Tout s'installe dans le profil de l'utilisateur (%LOCALAPPDATA%\VISION\noeud), sans droits d'administrateur.
+Unités d'essai sans valeur ; rien n'est vendu.
+
+  powershell -NoProfile -ExecutionPolicy Bypass -File installer-noeud-vision.ps1 [-Nom NOM] [-Pair URL[,URL]] [-Miroir URL[,URL]]
+             [-Api 127.0.0.1:PORT] [-P2p ADRESSE:PORT] [-Prefixe DOSSIER] [-SansTache] [-SansRaccourci]
+  powershell -NoProfile -ExecutionPolicy Bypass -File installer-noeud-vision.ps1 -Desinstaller     (les clés restent)
+
+Prérequis : Python 3.10 ou plus récent (py -3 ou python), client OpenSSH de Windows (ssh-keygen), tar.exe (Windows 10 1803+).
+Ce que fait le script : il extrait le code (archive ci-dessous, la même que celle de l'installateur Linux et macOS),
+crée deux clés ed25519 (nœud, portefeuille), écrit config.json, lance le nœud en arrière-plan (pythonw), crée une tâche
+planifiée à l'ouverture de session (ou, à défaut, un raccourci dans le dossier Démarrage) et un raccourci
+« VISION Portefeuille » dans le menu Démarrer et sur le Bureau, qui ouvre http://127.0.0.1:8861/ avec le passe local.
+Linux et macOS : installer-noeud-vision.sh.
+
+Construit le @@DATE@@ · bloc 0 épinglé @@BLOC0@@ · producteur @@PRODUCTEUR_COURT@@
+#>
+[CmdletBinding()]
+param(
+  [string]$Nom = '',
+  [string[]]$Pair = @(),
+  [string[]]$Miroir = @(),
+  [string]$Api = '127.0.0.1:8861',
+  [string]$P2p = '127.0.0.1:8862',
+  [string]$Prefixe = '',
+  [switch]$SansTache,
+  [switch]$SansRaccourci,
+  [switch]$Desinstaller
+)
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+
+# Valeurs épinglées à la construction (lues dans docs/chaine/info.json du dépôt) : identiques à l'installateur Linux.
+$PRODUCTEUR_PUB = '@@PRODUCTEUR_PUB@@'
+$BLOC0_EMPREINTE = '@@BLOC0@@'
+$PAIR_DEFAUT = '@@PAIR@@'
+$MIROIR_DEFAUT = '@@MIROIR@@'
+$DEPOT = '@@DEPOT@@'
+
+function Dire([string]$Texte) { Write-Host '> ' -ForegroundColor Cyan -NoNewline; Write-Host $Texte }
+function Echec([string]$Texte) { Write-Host "erreur : $Texte" -ForegroundColor Red; exit 2 }
+function Q([string]$Texte) { '"' + $Texte + '"' }
+
+# Lance un programme avec une ligne d'arguments passée telle quelle (un argument vide "" reste un argument vide,
+# ce que l'appel direct de Windows PowerShell 5.1 ne garantit pas) ; rend le code de sortie.
+function Executer([string]$Exe, [string]$Arguments) {
+  $p = Start-Process -FilePath $Exe -ArgumentList $Arguments -Wait -NoNewWindow -PassThru
+  return $p.ExitCode
+}
+
+# Python 3.10 ou plus récent : lanceur py -3, sinon python ou python3 (l'alias du Microsoft Store sans Python est écarté).
+function TrouverPython {
+  $ErrorActionPreference = 'Continue'
+  $essais = @()
+  if (Get-Command py -ErrorAction SilentlyContinue) { $essais += , @('py', '-3') }
+  if (Get-Command python -ErrorAction SilentlyContinue) { $essais += , @('python') }
+  if (Get-Command python3 -ErrorAction SilentlyContinue) { $essais += , @('python3') }
+  foreach ($e in $essais) {
+    $exe = $e[0]
+    $avant = @($e | Select-Object -Skip 1)
+    try { $sortie = & $exe @avant -c 'import sys; print(sys.executable)' 2>$null } catch { continue }
+    if ($LASTEXITCODE -ne 0 -or -not $sortie) { continue }
+    $chemin = ([string]($sortie | Select-Object -Last 1)).Trim()
+    if (-not $chemin -or -not (Test-Path -LiteralPath $chemin)) { continue }
+    try { & $chemin -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>$null } catch { continue }
+    if ($LASTEXITCODE -eq 0) { return $chemin }
+  }
+  return $null
+}
+
+function NouveauRaccourci([string]$Chemin, [string]$Cible, [string]$Arguments, [string]$Dossier, [string]$Icone, [int]$Style) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Chemin) | Out-Null
+  $coquille = New-Object -ComObject WScript.Shell
+  $l = $coquille.CreateShortcut($Chemin)
+  $l.TargetPath = $Cible
+  $l.Arguments = $Arguments
+  $l.WorkingDirectory = $Dossier
+  $l.WindowStyle = $Style
+  $l.Description = "Nœud et portefeuille du réseau d'essai VISION"
+  if ($Icone) { $l.IconLocation = $Icone }
+  $l.Save()
+}
+
+# Arrête les nœuds lancés depuis ce dossier (repérés par leur ligne de commande, jamais par un simple numéro de processus).
+function ArreterNoeud([string]$Code, [string]$Prefixe) {
+  $motif = (Join-Path $Code 'vision-noeud').ToLowerInvariant()
+  $vus = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'python%'" -ErrorAction SilentlyContinue |
+           Where-Object { $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($motif) })
+  foreach ($p in $vus) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+  if ($vus.Count -gt 0) { Start-Sleep -Seconds 1 }
+  Remove-Item -LiteralPath (Join-Path $Prefixe 'noeud.pid') -ErrorAction SilentlyContinue
+  return $vus.Count
+}
+
+# Ouvre le portefeuille avec le passe local : le passe passe par un fichier privé, jamais par une ligne de commande.
+$OUVREUR = @'
+# Ouvre le portefeuille du nœud VISION dans une fenêtre d'application (profil de navigateur séparé), sinon dans le
+# navigateur par défaut. Le passe local transite par un fichier privé et effacé, jamais par une ligne de commande.
+param([string]$Api = '127.0.0.1:8861', [string]$Prefixe = $PSScriptRoot)
+$passe = ''
+try { $passe = ([IO.File]::ReadAllText((Join-Path $Prefixe 'cles\passe-local'))).Trim() } catch { }
+$entree = Join-Path $Prefixe ('.ouvrir-' + [guid]::NewGuid().ToString('N') + '.html')
+$html = '<!doctype html><meta charset="utf-8"><script>location.replace("http://' + $Api + '/#passe=' + $passe + '")</script>'
+[IO.File]::WriteAllText($entree, $html)
+$url = ([Uri]$entree).AbsoluteUri
+$nav = $null
+foreach ($c in @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+                 "$env:ProgramFiles\Google\Chrome\Application\chrome.exe", "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+                 "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe", "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe")) {
+  if (-not $nav -and (Test-Path -LiteralPath $c)) { $nav = $c }
+}
+if ($nav) {
+  $profil = Join-Path $Prefixe 'navigateur'
+  Start-Process -FilePath $nav -ArgumentList ('--app="' + $url + '" --user-data-dir="' + $profil + '" --window-size=1280,860 --no-first-run')
+} else {
+  Start-Process -FilePath $entree
+}
+Start-Sleep -Seconds 20
+Remove-Item -LiteralPath $entree -ErrorAction SilentlyContinue
+'@
+
+# Essai lancé avec le code installé : ssh-keygen sait-il signer et vérifier (-Y) ? le miroir se lit-il en https ?
+# Espace de nom propre à l'essai : cette signature ne peut valoir ni pour un bloc ni pour une transaction.
+$ESSAI = @'
+import importlib.machinery, importlib.util, sys, urllib.request
+ch = importlib.machinery.SourceFileLoader("vision_chaine", sys.argv[1])
+J = importlib.util.module_from_spec(importlib.util.spec_from_loader("vision_chaine", ch)); ch.exec_module(J)
+m, e, cle = "essai d'installation VISION · é", "vision-installation", sys.argv[2]
+try:
+    s = J.signer(m, cle, e)
+    ok = J.verifier_sig(m, s, J.pub_de(cle), "essai", e) and not J.verifier_sig(m + ".", s, J.pub_de(cle), "essai", e)
+except (J.Refus, OSError) as x:
+    print(f"essai de signature : {x}"); sys.exit(3)
+if not ok:
+    print("essai de signature : vérification incohérente"); sys.exit(3)
+print("> signature ssh-keygen vérifiée")
+for miroir in sys.argv[3:]:
+    try:
+        urllib.request.urlopen(miroir + "/info.json", timeout=15).read(64)
+    except Exception as x:
+        print(f"attention : miroir {miroir} illisible ({x.__class__.__name__}) ; le nœud réessaiera toutes les minutes")
+'@
+
+function Principal {
+  if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { Echec 'Linux et macOS : utilisez installer-noeud-vision.sh' }
+  $defaut = Join-Path $env:LOCALAPPDATA 'VISION\noeud'
+  $Prefixe = $script:Prefixe
+  if (-not $Prefixe) { $Prefixe = $defaut }
+  $Prefixe = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Prefixe).TrimEnd('\')
+  $Code = Join-Path $Prefixe 'code'
+  $Config = Join-Path $Prefixe 'config.json'
+  $FichierOuvreur = Join-Path $Prefixe 'ouvrir-portefeuille.ps1'
+  $suffixe = ''
+  if ($Prefixe -ne $defaut) { $suffixe = ' (' + (Split-Path -Leaf $Prefixe) + ')' }
+  $Tache = "VISION noeud$suffixe"
+  $Menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'VISION Portefeuille.lnk'
+  $Bureau = Join-Path ([Environment]::GetFolderPath('Desktop')) 'VISION Portefeuille.lnk'
+  $Demarrage = Join-Path ([Environment]::GetFolderPath('Startup')) "VISION noeud$suffixe.lnk"
+
+  if ($Desinstaller) {
+    $n = ArreterNoeud $Code $Prefixe
+    try { Unregister-ScheduledTask -TaskName $Tache -Confirm:$false -ErrorAction Stop } catch { }
+    foreach ($f in @($Menu, $Bureau, $Demarrage, $FichierOuvreur)) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $Code -Recurse -Force -ErrorAction SilentlyContinue
+    Dire "nœud arrêté ($n processus) et retiré ; clés et chaîne conservées dans $Prefixe (portefeuille\ = votre clé, à garder)"
+    exit 0
+  }
+
+  # ── contrôles ──
+  $Nom = $script:Nom
+  if (-not $Nom) {
+    $Nom = ($env:COMPUTERNAME.ToLowerInvariant() -replace '[^a-z0-9-]', '-')
+    if ($Nom.Length -gt 30) { $Nom = $Nom.Substring(0, 30) }
+  }
+  if ($Nom -cnotmatch '^[a-z0-9][a-z0-9._-]{0,47}$') { Echec "nom de nœud invalide : $Nom" }
+  if (-not $Api.StartsWith('127.0.0.1:')) { Echec "le portefeuille n'écoute que sur 127.0.0.1" }
+  # -Pair a,b passé par -File arrive en une seule chaîne : on la découpe aux virgules
+  $Pairs = @($script:Pair | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+  $Miroirs = @($script:Miroir | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+  if ($Pairs.Count -eq 0 -and $PAIR_DEFAUT) { $Pairs = @($PAIR_DEFAUT) }
+  if ($Miroirs.Count -eq 0 -and $MIROIR_DEFAUT) { $Miroirs = @($MIROIR_DEFAUT) }
+  if ($Pairs.Count -eq 0 -and $Miroirs.Count -eq 0) { Echec 'aucun pair ni miroir : donnez -Pair URL ou -Miroir URL' }
+  foreach ($m in $Miroirs) {
+    if ($m -cnotmatch '^https://[A-Za-z0-9._-]+(/[A-Za-z0-9._/-]*)?$') { Echec "miroir invalide (https seulement) : $m" }
+  }
+  $Py = TrouverPython
+  if (-not $Py) { Echec 'Python 3.10 ou plus récent introuvable : installez-le depuis python.org (lanceur py inclus) ou le Microsoft Store' }
+  $Pyw = Join-Path (Split-Path -Parent $Py) 'pythonw.exe'
+  if (-not (Test-Path -LiteralPath $Pyw)) { $Pyw = $Py }
+  $outil = Get-Command ssh-keygen -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $outil) { Echec "ssh-keygen introuvable : ajoutez le « Client OpenSSH » (Paramètres > Système > Fonctionnalités facultatives)" }
+  $SshKeygen = $outil.Path
+  $Tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+  if (-not (Test-Path -LiteralPath $Tar)) { Echec 'tar.exe introuvable : Windows 10 version 1803 ou plus récente requise' }
+
+  Dire "installation du nœud « $Nom » dans $Prefixe (Python : $Py)"
+  foreach ($d in @('code', 'cles', 'portefeuille', 'chaine')) { New-Item -ItemType Directory -Force -Path (Join-Path $Prefixe $d) | Out-Null }
+  $avant = ArreterNoeud $Code $Prefixe
+  if ($avant -gt 0) { Dire "ancien nœud arrêté ($avant processus) : la réinstallation charge le nouveau code" }
+
+  # ── code : l'archive tar.gz en base64 placée en fin de script, extraite par le tar.exe de Windows ──
+  $tgz = Join-Path ([IO.Path]::GetTempPath()) ('vision-noeud-' + [guid]::NewGuid().ToString('N') + '.tar.gz')
+  [IO.File]::WriteAllBytes($tgz, [Convert]::FromBase64String($script:CHARGE))
+  try { $rc = Executer $Tar ('-xzf ' + (Q $tgz) + ' -C ' + (Q $Code)) } finally { Remove-Item -LiteralPath $tgz -ErrorAction SilentlyContinue }
+  if ($rc -ne 0) { Echec "extraction de l'archive impossible (tar, code $rc)" }
+
+  # ── clés : créées et gardées sur cette machine ──
+  $CleNoeud = Join-Path $Prefixe 'cles\noeud_ed25519'
+  $ClePortefeuille = Join-Path $Prefixe 'portefeuille\portefeuille_ed25519'
+  foreach ($c in @(@($CleNoeud, "vision-noeud-$Nom"), @($ClePortefeuille, "vision-portefeuille-$Nom"))) {
+    if (-not (Test-Path -LiteralPath $c[0])) {
+      $rc = Executer $SshKeygen ('-q -t ed25519 -N "" -C ' + $c[1] + ' -f ' + (Q $c[0]))
+      if ($rc -ne 0) { Echec "création de la clé $($c[0]) impossible (ssh-keygen, code $rc)" }
+    }
+  }
+
+  $fichierEssai = Join-Path ([IO.Path]::GetTempPath()) ('vision-essai-' + [guid]::NewGuid().ToString('N') + '.py')
+  [IO.File]::WriteAllText($fichierEssai, $script:ESSAI, (New-Object Text.UTF8Encoding $false))
+  $argsEssai = '-X utf8 -B ' + (Q $fichierEssai) + ' ' + (Q (Join-Path $Code 'vision-chaine')) + ' ' + (Q $CleNoeud)
+  foreach ($m in $Miroirs) { $argsEssai += ' ' + $m }
+  try { $rc = Executer $Py $argsEssai } finally { Remove-Item -LiteralPath $fichierEssai -ErrorAction SilentlyContinue }
+  if ($rc -ne 0) { Echec "ssh-keygen ne sait pas signer ou vérifier (-Y sign, -Y verify) : client OpenSSH 8.1 ou plus récent requis ($SshKeygen)" }
+
+  # ── configuration (UTF-8 sans BOM : Python la lit telle quelle) ──
+  $cfg = [ordered]@{
+    nom = $Nom; role = 'pair'; api = $Api; p2p = $P2p
+    pairs = @($Pairs); miroirs = @($Miroirs); depot = $(if ($DEPOT) { $DEPOT } else { $null })
+    bloc0_empreinte = $BLOC0_EMPREINTE; producteur_pub = $PRODUCTEUR_PUB
+    outil_chaine = (Join-Path $Code 'vision-chaine'); ui = (Join-Path $Code 'ui')
+    cle_noeud = $CleNoeud; portefeuille = $ClePortefeuille; chaine = (Join-Path $Prefixe 'chaine')
+    vision = '/nonexistent'; cadence_s = 5; p2p_public = $null; cockpit = $null; services = @()
+  }
+  [IO.File]::WriteAllText($Config, ($cfg | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
+  [IO.File]::WriteAllText($FichierOuvreur, $script:OUVREUR, (New-Object Text.UTF8Encoding $true))
+
+  # ── lancement : pythonw (sans fenêtre), mode UTF-8 ; journal dans noeud.log ──
+  $ArgsNoeud = '-X utf8 -B ' + (Q (Join-Path $Code 'vision-noeud')) + ' --config ' + (Q $Config)
+  $p = Start-Process -FilePath $Pyw -ArgumentList $ArgsNoeud -WorkingDirectory $Prefixe -WindowStyle Hidden -PassThru
+  [IO.File]::WriteAllText((Join-Path $Prefixe 'noeud.pid'), [string]$p.Id)
+  Dire "nœud lancé en arrière-plan (processus $($p.Id), journal $Prefixe\noeud.log)"
+
+  if (-not $SansTache) {
+    $ident = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    try {
+      $action = New-ScheduledTaskAction -Execute $Pyw -Argument $ArgsNoeud -WorkingDirectory $Prefixe
+      $declencheur = New-ScheduledTaskTrigger -AtLogOn -User $ident
+      $principal = New-ScheduledTaskPrincipal -UserId $ident -LogonType Interactive -RunLevel Limited
+      $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                    -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+      Register-ScheduledTask -TaskName $Tache -Action $action -Trigger $declencheur -Principal $principal -Settings $reglages `
+        -Description "Nœud VISION « $Nom » (réseau d'essai) et portefeuille http://$Api/" -Force -ErrorAction Stop | Out-Null
+      Remove-Item -LiteralPath $Demarrage -ErrorAction SilentlyContinue
+      Dire "tâche planifiée « $Tache » : le nœud démarre à chaque ouverture de session"
+    } catch {
+      NouveauRaccourci $Demarrage $Pyw $ArgsNoeud $Prefixe '' 7
+      Dire "tâche planifiée refusée ($($_.Exception.Message.Trim())) : raccourci posé dans le dossier Démarrage à la place"
+    }
+  }
+
+  if (-not $SansRaccourci) {
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $argsOuvrir = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' + (Q $FichierOuvreur) + ' -Api ' + $Api + ' -Prefixe ' + (Q $Prefixe)
+    $icone = Join-Path $Code 'icone.ico'
+    if (-not (Test-Path -LiteralPath $icone)) { $icone = '' }
+    NouveauRaccourci $Menu $ps $argsOuvrir $Prefixe $icone 7
+    NouveauRaccourci $Bureau $ps $argsOuvrir $Prefixe $icone 7
+    Dire 'raccourci « VISION Portefeuille » ajouté au menu Démarrer et sur le Bureau'
+  }
+
+  for ($i = 0; $i -lt 30; $i++) {
+    try {
+      $null = Invoke-WebRequest -UseBasicParsing -Uri "http://$Api/api/etat" -TimeoutSec 2
+      $pf = (Invoke-WebRequest -UseBasicParsing -Uri "http://$Api/api/portefeuille" -TimeoutSec 5).Content | ConvertFrom-Json
+      Dire "nœud prêt · portefeuille http://$Api/ · adresse $($pf.adresse)"
+      Dire "pour dépenser ou vous inscrire : raccourci « VISION Portefeuille » (l'adresse seule donne une lecture sans signature)"
+      exit 0
+    } catch { Start-Sleep -Seconds 1 }
+  }
+  Echec "le nœud ne répond pas sur http://$Api/ : voir $Prefixe\noeud.log"
+}
+
+# ── archive du code (tar.gz en base64) : nœud, outil de chaîne, portefeuille ; la même que pour Linux et macOS ──
+$CHARGE = @'
+@@CHARGE@@
+'@
+
+Principal

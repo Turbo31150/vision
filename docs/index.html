@@ -25,6 +25,7 @@
       <a href="./" aria-current="page">Le projet</a>
       <a href="explorateur/">Explorateur</a>
       <a href="#feuille-de-route">Feuille de route</a>
+      <a href="installer/">Installer</a>
       <a href="#rejoindre">Rejoindre</a>
       <a href="#boutique">Boutique</a>
       <a href="https://github.com/Turbo31150/vision">Code</a>
@@ -290,7 +291,7 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
   <section class="section" id="rejoindre">
     <div class="cadre">
       <h2>Rejoindre le réseau</h2>
-      <p class="chapeau">Il faut Linux, Python 3.10 ou plus récent et <code>ssh-keygen</code> (paquet openssh-client). Tout s'installe dans votre dossier personnel.</p>
+      <p class="chapeau">Le nœud s'installe sous Linux, Windows, macOS et Android (Termux), dans votre dossier personnel, sans droits d'administrateur. Il faut Python 3.10 ou plus récent et <code>ssh-keygen</code>. Les commandes de chaque système sont sur la page <a href="installer/">Installer</a> ; Linux ci-dessous.</p>
       <ol class="etapes">
         <li>Téléchargez l'installateur et vérifiez son empreinte.
 <pre>curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
@@ -302,6 +303,9 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
         <li>Dans l'onglet Nœud, préparez votre demande d'inscription. La transaction, signée par la clé de votre nœud, ne contient que des données publiques et s'ouvre en ticket sur le dépôt. Une fois importée par le producteur, votre nœud entre au registre, rattaché à votre portefeuille.</li>
       </ol>
       <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code>. Vos clés restent dans <code>~/.local/share/vision-noeud</code>.</p>
+      <div class="actions">
+        <a class="bouton principal" href="installer/">Installer sous Linux, Windows, macOS ou Android</a>
+      </div>
     </div>
   </section>
 

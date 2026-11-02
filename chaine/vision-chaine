@@ -157,6 +157,8 @@ def maintenant():
 # ── signature ssh-keygen ────────────────────────────────────────────────────────────────────────────
 # Sans agent : un agent SSH de session (trousseau GNOME, gcr) peut attendre une saisie et bloquer la signature.
 SANS_AGENT = {k: v for k, v in os.environ.items() if k != "SSH_AUTH_SOCK"}
+# Windows : sans console (pythonw), chaque appel ouvrirait une fenêtre ; ce drapeau la supprime. Rien ailleurs.
+SANS_FENETRE = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 
 def signer(texte, cle, espace):
@@ -164,19 +166,25 @@ def signer(texte, cle, espace):
         f = Path(t) / "m"
         f.write_text(texte, encoding="utf-8", newline="\n")
         r = subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(cle), "-n", espace, str(f)],
-                           capture_output=True, text=True, stdin=subprocess.DEVNULL, env=SANS_AGENT, timeout=20)
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL, env=SANS_AGENT, timeout=20,
+                           **SANS_FENETRE)
         if r.returncode:
             raise Refus(f"signature impossible : {r.stderr.strip()[:200]}")
         return (Path(t) / "m.sig").read_text(encoding="utf-8")
 
 
 def verifier_sig(texte, signature, pub, identite, espace):
+    """Le message arrive par l'entrée standard redirigée depuis un fichier (comme « < m »), pas par un tube : sous
+    Windows, ssh-keygen lit mal un tube, et le mode texte du tube y changerait les fins de ligne et l'encodage.
+    Sous Linux et macOS, ssh-keygen reçoit les mêmes octets UTF-8 qu'avant : même verdict."""
     with tempfile.TemporaryDirectory() as t:
         (Path(t) / "s").write_text(signature, encoding="utf-8", newline="\n")
         (Path(t) / "a").write_text(f'{identite} namespaces="{espace}" {pub}\n', encoding="utf-8", newline="\n")
-        r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n", espace,
-                            "-s", str(Path(t) / "s")], input=texte, capture_output=True, text=True,
-                           env=SANS_AGENT, timeout=20)
+        (Path(t) / "m").write_text(texte, encoding="utf-8", newline="\n")
+        with open(Path(t) / "m", "rb") as message:
+            r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n", espace,
+                                "-s", str(Path(t) / "s")], stdin=message, capture_output=True, text=True,
+                               env=SANS_AGENT, timeout=20, **SANS_FENETRE)
         return r.returncode == 0
 
 
@@ -1003,7 +1011,7 @@ def cmd_temoin_init(a):
     cle = d / f"{a.machine}_vision_ed25519"
     if not cle.exists():
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"vision-temoin-{a.machine}", "-f", str(cle)],
-                       check=True, stdin=subprocess.DEVNULL)
+                       check=True, stdin=subprocess.DEVNULL, **SANS_FENETRE)
     (d / "producteur.pub").write_text(a.producteur_pub.strip() + "\n")
     (d / "machine").write_text(a.machine + "\n")
     print(pub_de(cle))

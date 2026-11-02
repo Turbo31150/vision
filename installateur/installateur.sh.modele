@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Installateur du nœud VISION (réseau d'essai, chaîne VISION-essai) et de son portefeuille de bureau.
-# Tout s'installe dans l'espace de l'utilisateur, sans sudo. Unités d'essai sans valeur ; rien n'est vendu.
+# Installateur du nœud VISION (réseau d'essai, chaîne VISION-essai) et de son portefeuille de bureau :
+# Linux, macOS et Android (Termux). Tout s'installe dans l'espace de l'utilisateur, sans sudo.
+# Unités d'essai sans valeur ; rien n'est vendu. Windows : installer-noeud-vision.ps1 (même code, mêmes clés épinglées).
 #
 #   bash installer-noeud-vision.sh [--nom NOM] [--pair URL]... [--miroir URL]... [--api 127.0.0.1:PORT] [--p2p ADRESSE:PORT]
-#                                       [--prefixe DOSSIER] [--sans-systemd] [--sans-bureau]
+#                                       [--prefixe DOSSIER] [--sans-systemd|--sans-service] [--sans-bureau]
 #                                       [--p2p-public http://IP:PORT] [--cockpit URL]   (adresse annoncée aux pairs)
+#     Linux   : service systemd --user et icône du menu des applications ;
+#     macOS   : agent de session launchd (~/Library/LaunchAgents) et application ~/Applications/VISION Portefeuille.app ;
+#     Android : Termux (pkg install python openssh curl), nœud en arrière-plan (nohup) et raccourci Termux:Widget
+#               ~/.shortcuts/VISION Portefeuille qui relance le nœud au besoin et ouvre le portefeuille.
 #   bash installer-noeud-vision.sh --role producteur --chaine D --bloc0 F --cle-producteur K [--vision D]
 #   bash installer-noeud-vision.sh --desinstaller [--prefixe DOSSIER]     (les clés du portefeuille restent)
 #
@@ -16,14 +21,20 @@ PAIR_DEFAUT='@@PAIR@@'
 MIROIR_DEFAUT='@@MIROIR@@'
 DEPOT='@@DEPOT@@'
 MIROIRS=()
-ROLE=pair; NOM=$(hostname -s | tr 'A-Z' 'a-z' | tr -c 'a-z0-9-\n' '-' | cut -c1-30); PAIRS=()
+# Linux, Darwin (macOS) ou Android (Termux : uname -s dit Linux, uname -o dit Android) ; VISION_SYSTEME ne sert qu'aux essais
+SYSTEME=${VISION_SYSTEME:-$(uname -s)}
+if [ -z "${VISION_SYSTEME:-}" ] && { [ "$(uname -o 2>/dev/null)" = Android ] || [[ "${PREFIX:-}" == *com.termux* ]]; }; then SYSTEME=Android; fi
+HOTE=$( (hostname -s 2>/dev/null || hostname 2>/dev/null || uname -n) | head -n 1)
+if [ "$SYSTEME" = Android ] && command -v getprop >/dev/null; then HOTE=$(getprop ro.product.model 2>/dev/null || true); fi
+[ -n "$HOTE" ] || HOTE=noeud
+ROLE=pair; NOM=$(printf '%s\n' "$HOTE" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n-' '-' | cut -c1-30); PAIRS=()
 API=127.0.0.1:8861; P2P=127.0.0.1:8862; PREFIXE="$HOME/.local/share/vision-noeud"
 P2P_PUBLIC=""; COCKPIT=""; SYSTEMD=1; BUREAU=1; CHAINE=""; BLOC0=""; CLE_PROD=""; VISION=/nonexistent; DESINSTALLER=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --role) ROLE=$2; shift 2;; --nom) NOM=$2; shift 2;; --pair) PAIRS+=("$2"); shift 2;; --miroir) MIROIRS+=("$2"); shift 2;;
     --api) API=$2; shift 2;; --p2p) P2P=$2; shift 2;; --prefixe) PREFIXE=$2; shift 2;;
-    --sans-systemd) SYSTEMD=0; shift;; --sans-bureau) BUREAU=0; shift;;
+    --sans-systemd|--sans-service) SYSTEMD=0; shift;; --sans-bureau) BUREAU=0; shift;;
     --chaine) CHAINE=$2; shift 2;; --bloc0) BLOC0=$2; shift 2;; --cle-producteur) CLE_PROD=$2; shift 2;;
     --vision) VISION=$2; shift 2;; --desinstaller) DESINSTALLER=1; shift;;
     --p2p-public) P2P_PUBLIC=$2; shift 2;; --cockpit) COCKPIT=$2; shift 2;;
@@ -31,15 +42,31 @@ while [ $# -gt 0 ]; do
   esac
 done
 dire() { printf '\033[1;36m▸\033[0m %s\n' "$*"; }
-UNITE="vision-noeud-$(basename "$PREFIXE" | tr -c 'a-z0-9-\n' '-').service"
+UNITE="vision-noeud-$(basename "$PREFIXE" | tr -c 'a-z0-9\n-' '-').service"
 [ "$PREFIXE" = "$HOME/.local/share/vision-noeud" ] && UNITE=vision-noeud.service
+# macOS : agent launchd de la session, application minimale qui ouvre le portefeuille
+ETIQUETTE="io.github.turbo31150.${UNITE%.service}"
+PLIST="$HOME/Library/LaunchAgents/$ETIQUETTE.plist"
+APPLI="$HOME/Applications/VISION Portefeuille.app"
+DOMAINE="gui/$(id -u)"
+# Android (Termux) : raccourci de l'extension Termux:Widget
+RACCOURCI="$HOME/.shortcuts/VISION Portefeuille"
+case "$SYSTEME" in Linux|Darwin|Android) ;; *) echo "système non pris en charge : $SYSTEME (Linux, macOS, Android/Termux ; Windows : installer-noeud-vision.ps1)" >&2; exit 2;; esac
+[ "$SYSTEME" = Android ] && SYSTEMD=0      # ni systemd ni launchd : nœud en arrière-plan (nohup)
 
 if [ "$DESINSTALLER" = 1 ]; then
-  systemctl --user disable --now "$UNITE" 2>/dev/null || true
+  if [ "$SYSTEME" = Darwin ]; then
+    launchctl bootout "$DOMAINE/$ETIQUETTE" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null || true
+    rm -f "$PLIST"; rm -rf "$APPLI"
+  elif [ "$SYSTEME" = Android ]; then
+    rm -f "$RACCOURCI"
+  else
+    systemctl --user disable --now "$UNITE" 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/$UNITE" "$HOME/.local/share/applications/vision-portefeuille.desktop"
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
   [ -f "$PREFIXE/noeud.pid" ] && kill "$(cat "$PREFIXE/noeud.pid")" 2>/dev/null || true
-  rm -f "$HOME/.config/systemd/user/$UNITE" "$HOME/.local/share/applications/vision-portefeuille.desktop"
-  rm -rf "$PREFIXE/code"
-  systemctl --user daemon-reload 2>/dev/null || true
+  rm -rf "$PREFIXE/code"; rm -f "$PREFIXE/noeud.pid"
   dire "nœud arrêté et retiré ; clés et chaîne conservées dans $PREFIXE (portefeuille/ = votre clé, à garder)"
   exit 0
 fi
@@ -48,23 +75,43 @@ fi
 [[ "$API" == 127.0.0.1:* ]] || { echo "le portefeuille n'écoute que sur 127.0.0.1" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "python3 manquant" >&2; exit 2; }
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' || { echo "python3 ≥ 3.10 requis" >&2; exit 2; }
-command -v ssh-keygen >/dev/null || { echo "ssh-keygen manquant (paquet openssh-client)" >&2; exit 2; }
+command -v ssh-keygen >/dev/null || { echo "ssh-keygen manquant (paquet openssh-client ; Termux : pkg install openssh)" >&2; exit 2; }
+PY=$(python3 -c 'import sys; print(sys.executable)')     # chemin absolu : launchd ne voit pas le PATH de la session
 if [ "$ROLE" = producteur ]; then
   for f in "$CHAINE" "$BLOC0" "$CLE_PROD"; do [ -e "$f" ] || { echo "producteur : $f absent" >&2; exit 2; }; done
 else
   [ ${#PAIRS[@]} -eq 0 ] && [ -n "$PAIR_DEFAUT" ] && PAIRS=("$PAIR_DEFAUT")
   [ ${#MIROIRS[@]} -eq 0 ] && [ -n "$MIROIR_DEFAUT" ] && MIROIRS=("$MIROIR_DEFAUT")
   [ ${#PAIRS[@]} -eq 0 ] && [ ${#MIROIRS[@]} -eq 0 ] && { echo "aucun pair ni miroir : donnez --pair URL ou --miroir URL" >&2; exit 2; }
-  for m in "${MIROIRS[@]}"; do [[ "$m" =~ ^https://[A-Za-z0-9._-]+(/[A-Za-z0-9._/-]*)?$ ]] || { echo "miroir invalide (https seulement) : $m" >&2; exit 2; }; done
+  # ${t[@]+"${t[@]}"} : un tableau vide sous set -u ne fait pas échouer le bash 3.2 de macOS
+  for m in ${MIROIRS[@]+"${MIROIRS[@]}"}; do [[ "$m" =~ ^https://[A-Za-z0-9._-]+(/[A-Za-z0-9._/-]*)?$ ]] || { echo "miroir invalide (https seulement) : $m" >&2; exit 2; }; done
 fi
 
 dire "installation du nœud « $NOM » ($ROLE) dans $PREFIXE"
 umask 077
 mkdir -p "$PREFIXE"/{code,cles,portefeuille,chaine}
-sed -n '/^__CHARGE__$/,$p' "$0" | tail -n +2 | base64 -d | tar -xz -C "$PREFIXE/code"
+# archive : décodée par python3 (base64 -d n'existe pas sur les anciens macOS), extraite par tar (GNU ou BSD)
+sed -n '/^__CHARGE__$/,$p' "$0" | tail -n +2 | python3 -c 'import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' \
+  | tar -xzf - -C "$PREFIXE/code"
 chmod 755 "$PREFIXE/code/vision-noeud" "$PREFIXE/code/vision-chaine" "$PREFIXE/code/ouvrir-portefeuille"
 [ -f "$PREFIXE/cles/noeud_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "vision-noeud-$NOM" -f "$PREFIXE/cles/noeud_ed25519"
 [ -f "$PREFIXE/portefeuille/portefeuille_ed25519" ] || ssh-keygen -q -t ed25519 -N "" -C "vision-portefeuille-$NOM" -f "$PREFIXE/portefeuille/portefeuille_ed25519"
+
+# essai de signature avec le code installé : ssh-keygen doit savoir signer et vérifier (-Y, OpenSSH 8.2 ou plus récent).
+# Espace de nom propre à l'essai : cette signature ne peut valoir ni pour un bloc ni pour une transaction.
+python3 -B - "$PREFIXE/code/vision-chaine" "$PREFIXE/cles/noeud_ed25519" <<'ESSAI' || { echo "ssh-keygen ne sait pas signer ou vérifier (-Y) : OpenSSH 8.2 ou plus récent requis" >&2; exit 2; }
+import importlib.machinery, importlib.util, sys
+ch = importlib.machinery.SourceFileLoader("vision_chaine", sys.argv[1])
+J = importlib.util.module_from_spec(importlib.util.spec_from_loader("vision_chaine", ch)); ch.exec_module(J)
+m, e = "essai d'installation VISION · é", "vision-installation"
+try:
+    s = J.signer(m, sys.argv[2], e)
+    ok = J.verifier_sig(m, s, J.pub_de(sys.argv[2]), "essai", e) and not J.verifier_sig(m + ".", s, J.pub_de(sys.argv[2]), "essai", e)
+except (J.Refus, OSError) as x:
+    sys.exit(f"essai de signature : {x}")
+sys.exit(0 if ok else "essai de signature : vérification incohérente")
+ESSAI
+dire "signature ssh-keygen vérifiée"
 
 python3 - "$PREFIXE/config.json" <<PY
 import json, sys
@@ -83,8 +130,48 @@ if role == "producteur":
 json.dump(cfg, open(sys.argv[1], "w"), ensure_ascii=False, indent=1)
 PY
 
-LANCE="/usr/bin/env python3 -B $PREFIXE/code/vision-noeud --config $PREFIXE/config.json"
-if [ "$SYSTEMD" = 1 ] && systemctl --user show-environment >/dev/null 2>&1; then
+# le miroir doit se lire en https depuis ce python3 (sur macOS, un Python de python.org n'a ses certificats
+# qu'après « Install Certificates.command », dans le dossier Applications/Python 3.x)
+for m in ${MIROIRS[@]+"${MIROIRS[@]}"}; do
+  python3 -c 'import sys, urllib.request; urllib.request.urlopen(sys.argv[1] + "/info.json", timeout=15).read(64)' "$m" 2>/dev/null \
+    || echo "attention : miroir $m illisible depuis python3 (réseau ou certificats) ; le nœud réessaiera toutes les minutes" >&2
+done
+
+if [ "$SYSTEME" = Darwin ] || [ "$SYSTEME" = Android ]; then     # Termux n'a pas /usr/bin/env
+  LANCE="$PY -B $PREFIXE/code/vision-noeud --config $PREFIXE/config.json"
+else
+  LANCE="/usr/bin/env python3 -B $PREFIXE/code/vision-noeud --config $PREFIXE/config.json"
+fi
+lancer_en_fond() {
+  nohup $LANCE >> "$PREFIXE/noeud.log" 2>&1 &
+  echo $! > "$PREFIXE/noeud.pid"
+  dire "nœud lancé en arrière-plan (pid $(cat "$PREFIXE/noeud.pid"), journal $PREFIXE/noeud.log)"
+}
+if [ "$SYSTEME" = Darwin ] && [ "$SYSTEMD" = 1 ]; then
+  # agent launchd de la session : démarre à l'ouverture de session, redémarre après un échec (comme Restart=on-failure)
+  mkdir -p "$HOME/Library/LaunchAgents"
+  python3 - "$PLIST" "$ETIQUETTE" "$PY" "$PREFIXE" <<'PLIST'
+import plistlib, sys
+f, etiquette, py, prefixe = sys.argv[1:]
+plistlib.dump({"Label": etiquette,
+               "ProgramArguments": [py, "-B", prefixe + "/code/vision-noeud", "--config", prefixe + "/config.json"],
+               "RunAtLoad": True, "KeepAlive": {"SuccessfulExit": False}, "ThrottleInterval": 10,
+               "ProcessType": "Background", "Nice": 5, "WorkingDirectory": prefixe,
+               "StandardOutPath": prefixe + "/noeud.log", "StandardErrorPath": prefixe + "/noeud.log",
+               "EnvironmentVariables": {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin"}},
+              open(f, "wb"))
+PLIST
+  chmod 644 "$PLIST"
+  if command -v launchctl >/dev/null; then
+    launchctl bootout "$DOMAINE/$ETIQUETTE" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null || true
+    launchctl enable "$DOMAINE/$ETIQUETTE" 2>/dev/null || true
+    launchctl bootstrap "$DOMAINE" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"   # une réinstallation charge le nouveau code
+    dire "agent de session $ETIQUETTE actif (journal $PREFIXE/noeud.log)"
+  else
+    echo "launchctl introuvable : agent écrit ($PLIST) mais non chargé" >&2
+    lancer_en_fond
+  fi
+elif [ "$SYSTEME" = Linux ] && [ "$SYSTEMD" = 1 ] && systemctl --user show-environment >/dev/null 2>&1; then
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/$UNITE" <<UNIT
 [Unit]
@@ -105,12 +192,43 @@ UNIT
   systemctl --user restart "$UNITE"   # une réinstallation charge le nouveau code
   dire "service $UNITE actif"
 else
-  nohup $LANCE >> "$PREFIXE/noeud.log" 2>&1 &
-  echo $! > "$PREFIXE/noeud.pid"
-  dire "nœud lancé en arrière-plan (pid $(cat "$PREFIXE/noeud.pid"), journal $PREFIXE/noeud.log)"
+  lancer_en_fond
 fi
 
-if [ "$BUREAU" = 1 ]; then
+if [ "$BUREAU" = 1 ] && [ "$SYSTEME" = Darwin ]; then
+  # application minimale : un script qui ouvre le portefeuille avec le passe local (voir ouvrir-portefeuille)
+  rm -rf "$APPLI"; mkdir -p "$APPLI/Contents/MacOS"
+  printf '#!/bin/bash\nexec %q %q %q\n' "$PREFIXE/code/ouvrir-portefeuille" "$API" "$PREFIXE" > "$APPLI/Contents/MacOS/vision-portefeuille"
+  chmod 755 "$APPLI/Contents/MacOS/vision-portefeuille"
+  python3 - "$APPLI/Contents/Info.plist" <<'INFO'
+import plistlib, sys
+plistlib.dump({"CFBundleName": "VISION Portefeuille", "CFBundleDisplayName": "VISION Portefeuille",
+               "CFBundleIdentifier": "io.github.turbo31150.vision-portefeuille", "CFBundleExecutable": "vision-portefeuille",
+               "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "1.0", "CFBundleVersion": "1",
+               "LSUIElement": True}, open(sys.argv[1], "wb"))
+INFO
+  chmod -R go+rX "$APPLI"
+  dire "application « VISION Portefeuille » ajoutée dans ~/Applications"
+elif [ "$BUREAU" = 1 ] && [ "$SYSTEME" = Android ]; then
+  # Termux:Widget : relance le nœud s'il ne répond plus (Android a pu l'arrêter), puis ouvre le portefeuille
+  mkdir -p "$HOME/.shortcuts"
+  {
+    printf '#!%s\n' "$(command -v bash)"
+    printf '# VISION Portefeuille (Termux:Widget) : relance le nœud s'"'"'il ne répond plus, puis ouvre le portefeuille.\n'
+    printf 'API=%q; PREFIXE=%q; PY=%q\n' "$API" "$PREFIXE" "$PY"
+    cat <<'WIDGET'
+repond() { "$PY" -c 'import sys, urllib.request; urllib.request.urlopen("http://" + sys.argv[1] + "/api/etat", timeout=2)' "$API" 2>/dev/null; }
+if ! repond; then
+  nohup "$PY" -B "$PREFIXE/code/vision-noeud" --config "$PREFIXE/config.json" >> "$PREFIXE/noeud.log" 2>&1 &
+  echo $! > "$PREFIXE/noeud.pid"
+  for i in $(seq 1 30); do repond && break; sleep 1; done
+fi
+exec "$PREFIXE/code/ouvrir-portefeuille" "$API" "$PREFIXE"
+WIDGET
+  } > "$RACCOURCI"
+  chmod 700 "$RACCOURCI"
+  dire "raccourci « VISION Portefeuille » prêt pour Termux:Widget (~/.shortcuts)"
+elif [ "$BUREAU" = 1 ]; then
   mkdir -p "$HOME/.local/share/applications"
   cat > "$HOME/.local/share/applications/vision-portefeuille.desktop" <<DESK
 [Desktop Entry]
@@ -131,10 +249,15 @@ for i in $(seq 1 30); do
     ADR=$(python3 -c "import json,urllib.request; print(json.load(urllib.request.urlopen('http://$API/api/portefeuille'))['adresse'])")
     dire "nœud prêt · portefeuille http://$API/ · adresse $ADR"
     dire "pour dépenser ou vous inscrire : $PREFIXE/code/ouvrir-portefeuille $API $PREFIXE (l'adresse seule donne une lecture sans signature)"
+    [ "$SYSTEME" = Android ] && dire "Android peut arrêter Termux en arrière-plan : termux-wake-lock le garde éveillé ; le raccourci relance le nœud"
     exit 0
   fi
   sleep 1
 done
-echo "le nœud ne répond pas sur http://$API/ : voir journalctl --user -u $UNITE ou $PREFIXE/noeud.log" >&2
+if [ "$SYSTEME" = Darwin ] || [ "$SYSTEME" = Android ]; then
+  echo "le nœud ne répond pas sur http://$API/ : voir $PREFIXE/noeud.log" >&2
+else
+  echo "le nœud ne répond pas sur http://$API/ : voir journalctl --user -u $UNITE ou $PREFIXE/noeud.log" >&2
+fi
 exit 1
 __CHARGE__

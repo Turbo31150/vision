@@ -73,6 +73,8 @@ class Trop(Exception):
     def __init__(self, code, msg):
         super().__init__(msg)
         self.code = code
+# Windows : sans console (pythonw), chaque appel ouvrirait une fenêtre ; ce drapeau la supprime. Rien ailleurs.
+SANS_FENETRE = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 TYPES_P2P = {"depense", "inscription"}      # seuls types acceptés d'un pair : signés par leur auteur
 VERROU = threading.RLock()
 JOURNAL = []
@@ -151,7 +153,8 @@ class Noeud:
         if shutil.which("nvidia-smi"):
             try:
                 r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu,temperature.gpu",
-                                    "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6)
+                                    "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6,
+                                   **SANS_FENETRE)
                 for l in r.stdout.strip().splitlines():
                     x = [y.strip() for y in l.split(",")]
                     if len(x) == 5:
@@ -637,7 +640,8 @@ class Noeud:
         gpus = []
         if shutil.which("nvidia-smi"):
             r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,utilization.gpu,temperature.gpu",
-                                "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6)
+                                "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6,
+                               **SANS_FENETRE)
             for l in r.stdout.strip().splitlines():
                 p = [x.strip() for x in l.split(",")]
                 if len(p) == 4:
@@ -854,6 +858,8 @@ class Serveur(ThreadingHTTPServer):
     Au-delà, 503 immédiat et fermeture, sans fil ni lecture."""
     daemon_threads = True
     request_queue_size = 16
+    # Sous Windows, SO_REUSEADDR laisserait un second processus écouter sur le même port : on le refuse.
+    allow_reuse_address = os.name != "nt"
 
     def __init__(self, adresse, handler, max_simultanees, max_par_pair):
         super().__init__(adresse, handler)
@@ -895,9 +901,16 @@ def ecouter(adresse, handler, limites=LIMITES, local=False):
 
 
 def main():
+    if os.name == "nt" and not sys.flags.utf8_mode:
+        # Windows : blocs et bloc 0 s'écrivent en UTF-8 ; sans le mode UTF-8, une lecture faite en ANSI changerait les
+        # accents et donc les empreintes. On se relance en « -X utf8 » (l'installateur Windows lance déjà ainsi).
+        sys.exit(subprocess.call([sys.executable, "-X", "utf8", *sys.orig_argv[1:]]))   # même console, ou aucune
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", required=True)
     a = ap.parse_args()
+    if sys.stdout is None:      # pythonw (Windows) : pas de console ; le journal va à côté de la configuration
+        sys.stdout = sys.stderr = open(Path(os.path.expanduser(a.config)).with_name("noeud.log"), "a",
+                                       encoding="utf-8", buffering=1)
     cfg = json.loads(Path(os.path.expanduser(a.config)).read_text())
     if not cfg["api"].startswith("127.0.0.1:"):
         sys.exit("l'API du portefeuille n'écoute que sur 127.0.0.1")

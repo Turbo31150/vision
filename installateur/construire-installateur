@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Construit docs/installer-noeud-vision.sh à partir de ce dépôt : modèle + archive (nœud, outil de chaîne, portefeuille).
+# Construit les installateurs à partir de ce dépôt : modèle + archive (nœud, outil de chaîne, portefeuille, icône).
+#   docs/installer-noeud-vision.sh    Linux et macOS (bash)
+#   docs/installer-noeud-vision.ps1   Windows 10 et 11 (PowerShell) : même archive, mêmes valeurs épinglées
 # La clé publique du producteur et l'empreinte du bloc 0 viennent du miroir public (docs/chaine/info.json) :
-# n'importe qui peut reconstruire l'installateur et comparer son empreinte sha256 à celle qui est publiée.
+# n'importe qui peut reconstruire les installateurs et comparer leurs empreintes sha256 à celles qui sont publiées.
+# La construction demande les outils GNU (tar --sort, base64 -w) : elle se fait sous Linux.
 #   installateur/construire-installateur [URL-du-miroir] [propriétaire/dépôt]
 set -euo pipefail
 RACINE=$(cd "$(dirname "$0")/.." && pwd)
@@ -11,15 +14,33 @@ INFO="$RACINE/docs/chaine/info.json"
 PUB=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['producteur_pub'])" "$INFO")
 B0=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['bloc0'])" "$INFO")
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-cp "$RACINE/noeud/vision-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/chaine/vision-chaine" "$T/"
-cp -r "$RACINE/noeud/ui" "$T/ui"
-SORTIE="$RACINE/docs/installer-noeud-vision.sh"
-# date fixe = celle du bloc de tête : deux constructions du même état donnent le même fichier
+mkdir "$T/archive"
+cp "$RACINE/noeud/vision-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/noeud/icone.ico" "$RACINE/chaine/vision-chaine" "$T/archive/"
+cp -r "$RACINE/noeud/ui" "$T/archive/ui"
+# date fixe = celle du bloc de tête : deux constructions du même état donnent les mêmes fichiers
 DATE=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['genere_le'][:10])" "$INFO")
-sed -e "s|@@PRODUCTEUR_PUB@@|$PUB|" -e "s|@@BLOC0@@|$B0|g" -e "s|@@PAIR@@||" -e "s|@@MIROIR@@|$MIROIR|" -e "s|@@DEPOT@@|$DEPOT|" \
-    -e "s|@@DATE@@|$DATE|" -e "s|@@PRODUCTEUR_COURT@@|${PUB:12:24}…|" "$RACINE/installateur/installateur.sh.modele" > "$SORTIE"
-tar -C "$T" --sort=name --mtime="$DATE 00:00Z" --owner=0 --group=0 --numeric-owner -c . | gzip -n | base64 -w 76 >> "$SORTIE"
+tar -C "$T/archive" --sort=name --mtime="$DATE 00:00Z" --owner=0 --group=0 --numeric-owner -c . | gzip -n | base64 -w 76 > "$T/charge.b64"
+remplir() {
+  sed -e "s|@@PRODUCTEUR_PUB@@|$PUB|" -e "s|@@BLOC0@@|$B0|g" -e "s|@@PAIR@@||" -e "s|@@MIROIR@@|$MIROIR|" -e "s|@@DEPOT@@|$DEPOT|" \
+      -e "s|@@DATE@@|$DATE|" -e "s|@@PRODUCTEUR_COURT@@|${PUB:12:24}…|" "$1"
+}
+
+# Linux et macOS : script bash, puis l'archive après la ligne __CHARGE__
+SORTIE="$RACINE/docs/installer-noeud-vision.sh"
+remplir "$RACINE/installateur/installateur.sh.modele" > "$SORTIE"
+cat "$T/charge.b64" >> "$SORTIE"
 chmod 755 "$SORTIE"
-(cd "$RACINE/docs" && sha256sum installer-noeud-vision.sh > installer-noeud-vision.sh.sha256)
-echo "installateur : $SORTIE ($(du -h "$SORTIE" | cut -f1)) · miroir $MIROIR · dépôt $DEPOT"
-cat "$RACINE/docs/installer-noeud-vision.sh.sha256"
+
+# Windows : script PowerShell en UTF-8 avec BOM (sans BOM, Windows PowerShell 5.1 lirait les accents en ANSI) ;
+# l'archive remplace la ligne @@CHARGE@@ d'une chaîne littérale @' … '@
+SORTIE_PS1="$RACINE/docs/installer-noeud-vision.ps1"
+{ printf '\357\273\277'; remplir "$RACINE/installateur/installer-noeud-vision.ps1.modele" | sed -e "/^@@CHARGE@@\$/{r $T/charge.b64" -e 'd;}'; } > "$SORTIE_PS1"
+chmod 644 "$SORTIE_PS1"
+if grep -n '@@[A-Z_0-9]*@@' "$SORTIE" "$SORTIE_PS1"; then     # le base64 ne contient jamais @
+  echo "marqueur non remplacé ci-dessus" >&2; exit 1
+fi
+
+(cd "$RACINE/docs" && sha256sum installer-noeud-vision.sh > installer-noeud-vision.sh.sha256 \
+                   && sha256sum installer-noeud-vision.ps1 > installer-noeud-vision.ps1.sha256)
+echo "installateurs : $SORTIE ($(du -h "$SORTIE" | cut -f1)), $SORTIE_PS1 ($(du -h "$SORTIE_PS1" | cut -f1)) · miroir $MIROIR · dépôt $DEPOT"
+cat "$RACINE/docs/installer-noeud-vision.sh.sha256" "$RACINE/docs/installer-noeud-vision.ps1.sha256"

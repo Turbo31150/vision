@@ -74,8 +74,15 @@ def signature_ok(texte, signature, pub, identite, espace):
             f.write(f'{identite} namespaces="{espace}" {pub}\n')
         with open(s, "w", encoding="utf-8", newline="\n") as f:
             f.write(signature)
-        return subprocess.run(["ssh-keygen", "-Y", "verify", "-f", a, "-I", identite, "-n", espace, "-s", s],
-                              input=texte.encode("utf-8"), capture_output=True, env=SANS_AGENT, timeout=20).returncode == 0
+        # message par l'entrée standard redirigée depuis un fichier (« < m ») : sous Windows, ssh-keygen lit mal un tube
+        m = os.path.join(d, "m")
+        with open(m, "wb") as f:
+            f.write(texte.encode("utf-8"))
+        with open(m, "rb") as entree:
+            return subprocess.run(["ssh-keygen", "-Y", "verify", "-f", a, "-I", identite, "-n", espace, "-s", s],
+                                  stdin=entree, capture_output=True, env=SANS_AGENT, timeout=20,
+                                  **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {})
+                                  ).returncode == 0
 
 
 def adresse_de(cle):

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VISION · installer un nœud (Linux, Windows, macOS, Android)</title>
+<meta name="description" content="Installer le nœud VISION et son portefeuille de bureau sous Linux, Windows, macOS ou Android (Termux) : commandes à copier, vérification d'empreinte, prérequis et désinstallation. Réseau d'essai, unités sans valeur.">
+<link rel="icon" href="../icone.svg">
+<link rel="preload" href="../polices/UbuntuSans-variable.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="installer.css">
+<script defer src="installer.js"></script>
+</head>
+<body>
+<header class="entete">
+  <div class="cadre">
+    <a class="marque" href="../"><img src="../icone.svg" alt="" width="30" height="30">VISION</a>
+    <nav class="liens" aria-label="Navigation principale">
+      <a href="../">Le projet</a>
+      <a href="../explorateur/">Explorateur</a>
+      <a href="../#feuille-de-route">Feuille de route</a>
+      <a href="./" aria-current="page">Installer</a>
+      <a href="../#rejoindre">Rejoindre</a>
+      <a href="../#boutique">Boutique</a>
+      <a href="https://github.com/Turbo31150/vision">Code</a>
+    </nav>
+  </div>
+</header>
+<div class="essai"><div class="cadre">Réseau d'essai : les unités VISION-essai n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div></div>
+
+<main>
+  <section class="section installer-tete">
+    <div class="cadre">
+      <h1>Installer un nœud</h1>
+      <p class="chapeau">Un nœud et son portefeuille de bureau, installés dans votre dossier personnel, sans droits d'administrateur. Le nœud lit la chaîne d'essai sur le miroir public et la rejoue depuis le bloc 0, avec la clé du producteur épinglée dans l'installateur. Deux clés ed25519 sont créées sur votre machine ; le logiciel ne les transmet jamais.</p>
+      <p class="vide">Choisissez votre système. Chaque commande se copie d'un clic ; lisez l'installateur avant de le lancer, c'est un script en clair suivi d'une archive du code du dépôt.</p>
+    </div>
+  </section>
+
+  <section class="section systemes-zone" aria-label="Instructions par système">
+    <div class="cadre">
+      <div class="onglets" role="tablist" aria-label="Système d'exploitation">
+        <a role="tab" id="onglet-linux" href="#linux" aria-controls="linux">Linux</a>
+        <a role="tab" id="onglet-windows" href="#windows" aria-controls="windows">Windows</a>
+        <a role="tab" id="onglet-macos" href="#macos" aria-controls="macos">macOS</a>
+        <a role="tab" id="onglet-android" href="#android" aria-controls="android">Android (Termux)</a>
+      </div>
+
+      <!-- ── Linux ── -->
+      <article class="panneau" id="linux" role="tabpanel" aria-labelledby="onglet-linux" tabindex="0">
+        <div class="panneau-tete">
+          <h2>Linux</h2>
+          <span class="statut-essai teste">Testé sous Linux le 2 novembre 2026 : installation, lecture du miroir, chaîne rejouée</span>
+        </div>
+        <h3>Prérequis</h3>
+        <ul class="sobre">
+          <li><b>Python 3.10</b> ou plus récent, <b><code>ssh-keygen</code></b> (paquet openssh-client) et <b><code>curl</code></b>. Sous Debian ou Ubuntu, s'ils manquent : <code>sudo apt install python3 openssh-client curl</code>.</li>
+          <li>Rien d'autre ne demande de droits d'administrateur : le nœud tourne avec votre compte.</li>
+        </ul>
+        <ol class="etapes">
+          <li>Téléchargez l'installateur et vérifiez son empreinte.
+<pre><code>curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+sha256sum -c installer-noeud-vision.sh.sha256</code></pre></li>
+          <li>Lisez-le, puis lancez-le.
+<pre><code>less installer-noeud-vision.sh
+bash installer-noeud-vision.sh --nom mon-noeud</code></pre></li>
+          <li>Ouvrez le portefeuille par l'icône « VISION Portefeuille » du menu des applications, ou par la commande affichée à la fin de l'installation.</li>
+        </ol>
+        <p class="vide">Ce qui est posé : le code et les clés dans <code>~/.local/share/vision-noeud</code>, un service <code>systemd --user</code> (<code>vision-noeud.service</code>) qui démarre avec votre session, l'icône du menu. Sans systemd, ou avec <code>--sans-systemd</code>, le nœud tourne en arrière-plan et écrit son journal dans <code>noeud.log</code>.</p>
+        <h3>Désinstaller</h3>
+<pre><code>bash installer-noeud-vision.sh --desinstaller</code></pre>
+        <p class="vide">Le nœud est arrêté et son code retiré ; vos clés et votre copie de la chaîne restent dans <code>~/.local/share/vision-noeud</code>. Le dossier <code>portefeuille/</code> contient votre clé : gardez-le.</p>
+      </article>
+
+      <!-- ── Windows ── -->
+      <article class="panneau" id="windows" role="tabpanel" aria-labelledby="onglet-windows" tabindex="0">
+        <div class="panneau-tete">
+          <h2>Windows 10 et 11</h2>
+          <span class="statut-essai non-teste">Non testé sur ce système : écrit pour Windows 10 et 11, pas encore essayé sur une machine Windows</span>
+        </div>
+        <h3>Prérequis</h3>
+        <ul class="sobre">
+          <li><b>Python 3.10</b> ou plus récent, depuis python.org (gardez le lanceur <code>py</code>) ou le Microsoft Store.</li>
+          <li><b>Client OpenSSH</b> de Windows, pour <code>ssh-keygen</code> : présent d'origine sur les versions récentes ; sinon, Paramètres, Système, Fonctionnalités facultatives, « Client OpenSSH ».</li>
+          <li><b>Windows 10 version 1803</b> ou plus récente, pour <code>curl.exe</code> et <code>tar.exe</code>. Aucun droit d'administrateur n'est demandé.</li>
+        </ul>
+        <ol class="etapes">
+          <li>Dans PowerShell, téléchargez l'installateur et vérifiez son empreinte : la dernière commande doit afficher <code>True</code>.
+<pre><code>cd $env:USERPROFILE\Downloads
+curl.exe -LO https://turbo31150.github.io/vision/installer-noeud-vision.ps1
+curl.exe -LO https://turbo31150.github.io/vision/installer-noeud-vision.ps1.sha256
+(Get-FileHash .\installer-noeud-vision.ps1 -Algorithm SHA256).Hash -eq (Get-Content .\installer-noeud-vision.ps1.sha256).Split(' ')[0]</code></pre></li>
+          <li>Lisez-le (un script PowerShell en clair, suivi de l'archive du code), puis lancez-le.
+<pre><code>notepad .\installer-noeud-vision.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\installer-noeud-vision.ps1 -Nom mon-pc</code></pre></li>
+          <li>Ouvrez le portefeuille par le raccourci « VISION Portefeuille » du menu Démarrer ou du Bureau : il ouvre <code>http://127.0.0.1:8861/</code> avec le passe local, qui seul permet de signer.</li>
+        </ol>
+        <p class="vide">Ce qui est posé : le code et les clés dans <code>%LOCALAPPDATA%\VISION\noeud</code>, le nœud lancé en arrière-plan sans fenêtre (<code>pythonw</code>, journal <code>noeud.log</code>), une tâche planifiée « VISION noeud » à l'ouverture de votre session (si Windows la refuse, un raccourci dans le dossier Démarrage la remplace) et le raccourci « VISION Portefeuille ». Options : <code>-Pair</code>, <code>-Miroir</code>, <code>-Api</code>, <code>-P2p</code>, <code>-Prefixe</code>, <code>-SansTache</code>, <code>-SansRaccourci</code>.</p>
+        <h3>Désinstaller</h3>
+<pre><code>powershell -NoProfile -ExecutionPolicy Bypass -File .\installer-noeud-vision.ps1 -Desinstaller</code></pre>
+        <p class="vide">Le nœud est arrêté, la tâche planifiée et les raccourcis retirés ; vos clés restent dans <code>%LOCALAPPDATA%\VISION\noeud</code>. Le dossier <code>portefeuille\</code> contient votre clé : gardez-le.</p>
+      </article>
+
+      <!-- ── macOS ── -->
+      <article class="panneau" id="macos" role="tabpanel" aria-labelledby="onglet-macos" tabindex="0">
+        <div class="panneau-tete">
+          <h2>macOS</h2>
+          <span class="statut-essai non-teste">Non testé sur ce système : écrit pour macOS, pas encore essayé sur un Mac</span>
+        </div>
+        <h3>Prérequis</h3>
+        <ul class="sobre">
+          <li><b>Python 3.10</b> ou plus récent : le <code>python3</code> fourni avec les outils de développement d'Apple est souvent plus ancien. Installez-le depuis python.org, puis lancez une fois « Install Certificates.command » (dossier Applications, Python 3.x), ou par Homebrew : <code>brew install python</code>.</li>
+          <li><b><code>ssh-keygen</code></b> et <b><code>curl</code></b> sont fournis avec macOS. Aucun droit d'administrateur n'est demandé.</li>
+        </ul>
+        <ol class="etapes">
+          <li>Dans le Terminal, téléchargez l'installateur et vérifiez son empreinte.
+<pre><code>curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+shasum -a 256 -c installer-noeud-vision.sh.sha256</code></pre></li>
+          <li>Lisez-le, puis lancez-le.
+<pre><code>less installer-noeud-vision.sh
+bash installer-noeud-vision.sh --nom mon-mac</code></pre></li>
+          <li>Ouvrez le portefeuille par l'application « VISION Portefeuille » de votre dossier Applications personnel (<code>~/Applications</code>).</li>
+        </ol>
+        <p class="vide">Ce qui est posé : le code et les clés dans <code>~/.local/share/vision-noeud</code>, un agent de session launchd (<code>~/Library/LaunchAgents/io.github.turbo31150.vision-noeud.plist</code>) qui démarre le nœud à l'ouverture de session et le relance après un échec, et l'application « VISION Portefeuille ». Le journal est dans <code>noeud.log</code>.</p>
+        <h3>Désinstaller</h3>
+<pre><code>bash installer-noeud-vision.sh --desinstaller</code></pre>
+        <p class="vide">Le nœud est arrêté, l'agent et l'application retirés ; vos clés restent dans <code>~/.local/share/vision-noeud</code>. Le dossier <code>portefeuille/</code> contient votre clé : gardez-le.</p>
+      </article>
+
+      <!-- ── Android ── -->
+      <article class="panneau" id="android" role="tabpanel" aria-labelledby="onglet-android" tabindex="0">
+        <div class="panneau-tete">
+          <h2>Android, avec Termux</h2>
+          <span class="statut-essai non-teste">Non testé sur un téléphone : écrit pour Termux, pas encore essayé sur un appareil Android</span>
+        </div>
+        <h3>Prérequis</h3>
+        <ul class="sobre">
+          <li><b>Termux</b>, installé depuis F-Droid ou les publications GitHub du projet Termux, pas depuis le Play Store.</li>
+          <li><b>Termux:Widget</b>, si vous voulez un raccourci sur l'écran d'accueil : il doit venir de la même source que Termux.</li>
+          <li>Dans Termux : <code>pkg install python openssh curl</code>. Aucun accès administrateur (root) n'est demandé.</li>
+        </ul>
+        <ol class="etapes">
+          <li>Dans Termux, installez les paquets, téléchargez l'installateur et vérifiez son empreinte.
+<pre><code>pkg install python openssh curl
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+sha256sum -c installer-noeud-vision.sh.sha256</code></pre></li>
+          <li>Lisez-le, puis lancez-le. Termux est reconnu : le nœud tourne en arrière-plan, sans service système.
+<pre><code>less installer-noeud-vision.sh
+bash installer-noeud-vision.sh --nom mon-telephone
+termux-wake-lock</code></pre></li>
+          <li>Ajoutez le widget Termux:Widget sur l'écran d'accueil et choisissez « VISION Portefeuille » : il relance le nœud si Android l'a arrêté, puis ouvre le portefeuille dans le navigateur.</li>
+        </ol>
+        <p class="vide">Ce qui est posé : le code et les clés dans <code>~/.local/share/vision-noeud</code> (dans l'espace privé de Termux), le nœud en arrière-plan (journal <code>noeud.log</code>) et le raccourci <code>~/.shortcuts/VISION Portefeuille</code>. Android peut arrêter Termux en arrière-plan : <code>termux-wake-lock</code> le garde éveillé, au prix de la batterie. Le portefeuille n'écoute que sur le téléphone lui-même (<code>127.0.0.1</code>).</p>
+        <h3>Désinstaller</h3>
+<pre><code>bash installer-noeud-vision.sh --desinstaller</code></pre>
+        <p class="vide">Le nœud est arrêté, le raccourci et le code retirés ; vos clés restent dans <code>~/.local/share/vision-noeud</code>. Le dossier <code>portefeuille/</code> contient votre clé : gardez-le.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="cadre deux-col">
+      <div>
+        <h2>Après l'installation</h2>
+        <ul class="sobre">
+          <li><b>Le portefeuille</b> n'est servi que sur votre machine, à <code>http://127.0.0.1:8861/</code>. Ouvert par l'icône ou le raccourci, il reçoit le passe local et peut signer ; l'adresse seule donne une lecture sans signature.</li>
+          <li><b>La chaîne</b> est lue sur le miroir public et rejouée depuis le bloc 0 : liens, racines de Merkle, soldes, signatures. Un miroir ne peut rien imposer au nœud.</li>
+          <li><b>L'inscription</b> se prépare dans l'onglet Nœud : une transaction signée par la clé du nœud, qui ne contient que des données publiques, s'ouvre en ticket sur le dépôt.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Vérifier l'installateur</h2>
+        <ul class="sobre">
+          <li><b>Les empreintes publiées</b> : <a href="../installer-noeud-vision.sh.sha256">installer-noeud-vision.sh.sha256</a> (Linux, macOS, Android) et <a href="../installer-noeud-vision.ps1.sha256">installer-noeud-vision.ps1.sha256</a> (Windows).</li>
+          <li><b>La reconstruction</b> : les deux installateurs se reconstruisent à l'identique à partir du dépôt, sous Linux, avec <code>installateur/construire-installateur</code>. La clé publique du producteur et l'empreinte du bloc 0 viennent de <code>docs/chaine/info.json</code>.</li>
+          <li><b>Le même code partout</b> : les deux installateurs contiennent la même archive (nœud, outil de chaîne, portefeuille) et épinglent les mêmes valeurs.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="cadre">
+    <span>VISION, réseau d'essai.</span>
+    <a href="https://github.com/Turbo31150/vision">Code et données sur GitHub</a>
+    <span>Unité affichée VISION-essai ; l'identifiant gravé dans les blocs reste vision-essai.</span>
+  </div>
+</footer>
+</body>
+</html>
