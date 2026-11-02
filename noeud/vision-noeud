@@ -253,11 +253,16 @@ class Noeud:
             minuterie.cancel()
             c.close()
 
+    def est_soi(self, u):
+        """Adresse de ce nœud lui-même (02/11 : sans p2p_public, l'échange de pairs renvoyait au nœud sa propre adresse
+        « http://<p2p> » ; il se comptait deux fois dans /api/reseau : 4 nœuds actifs pour 3 machines)."""
+        return u in {self.cfg.get("p2p_public"), "http://" + str(self.cfg.get("p2p") or "")}
+
     def sonder_candidats(self):
         """Un pair annoncé n'est retenu qu'après une vérification : il répond, sur le même bloc 0."""
         for u in list(self.candidats):
             self.candidats.discard(u)
-            if u in self.pairs or u == self.cfg.get("p2p_public") or len(self.pairs) >= 64:
+            if u in self.pairs or self.est_soi(u) or len(self.pairs) >= 64:
                 continue
             try:
                 i = self.http(u + "/p2p/info", delai=4)
@@ -270,6 +275,9 @@ class Noeud:
     def synchroniser(self):
         self.sonder_candidats()
         for p, info in list(self.pairs.items()):
+            if self.est_soi(p):          # entrée héritée d'avant le correctif : retirée, jamais sondée
+                del self.pairs[p]
+                continue
             try:
                 q = "?annonce=" + urllib.parse.quote(self.cfg["p2p_public"], safe="") if self.cfg.get("p2p_public") else ""
                 info["echecs"] = info.get("echecs", 0) + 1     # remis à zéro si le tour aboutit
@@ -283,7 +291,7 @@ class Noeud:
                 info["echecs"] = 0
                 for autre in i.get("pairs", [])[:64]:    # échange de pairs : même filtre qu'une annonce, plafond
                     if (isinstance(autre, str) and ANNONCE.fullmatch(autre) and autre not in self.pairs
-                            and autre != self.cfg.get("p2p_public") and len(self.pairs) < self.limites["max_pairs"]):
+                            and not self.est_soi(autre) and len(self.pairs) < self.limites["max_pairs"]):
                         self.pairs[autre] = {"vu": None, "hauteur": None, "erreur": None}
                 if self.producteur:
                     continue
