@@ -23,7 +23,8 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 - **La puissance mise en commun** : chaque machine annonce ses cartes, sa mémoire et sa charge ; les annonces sont signées puis additionnées. C'est une puissance déclarée : aucune attestation matérielle n'est encore en place.
 - **Des points sur preuve, en simulation** : un travail ne compte qu'avec le reçu signé d'une autre machine. Aucune récompense n'est émise : le budget est fictif, non convertible et ne donne droit à aucun paiement.
 
-![Capture réelle de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
+![Dans l'ombre, un treillis discret organise ; dans la lumière, deux anneaux se croisent au-dessus de blocs de verre](docs/images/heros.jpg)
+*L'ombre produit, la lumière vérifie ; là où les deux anneaux se croisent, le travail devient une preuve. Illustration générée par IA (Manus).*
 
 ## Ce que contient ce dépôt
 
@@ -37,6 +38,9 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | `docs/` | Le site du projet, l'explorateur, le miroir de la chaîne et l'installateur |
 
 ## Vérifier sans nous croire
+
+![Capture réelle de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
+*Capture réelle de l'explorateur.*
 
 `outils/verifier-chaine` rejoue toute la chaîne publiée sans utiliser le code du nœud : liens, racines de Merkle, soldes, signatures, changements de clé. Il ne demande que Python 3.10 et `ssh-keygen`.
 
@@ -83,13 +87,13 @@ cat docs/installer-noeud-vision.sh.sha256
 
 **1. Des machines ordinaires, reliées.** Un PC de bureau ou un portable sous Linux, avec ou sans carte graphique, suffit. Chaque machine installe un nœud : il garde une copie de la chaîne, parle aux autres nœuds et sert le portefeuille. Une seule machine, le producteur, signe aujourd'hui les blocs ; les autres rejouent tout ce qu'il publie au lieu de le croire.
 
-![Un ordinateur qui garde deux clés lumineuses, entouré de blocs](docs/images/noeud-cles.jpg)
+![Une tour de PC à paroi de verre ; près de la carte graphique, deux petites clés de lumière, une cyan et une blanche](docs/images/noeud-cles.jpg)
 *Illustration générée par IA (Manus).*
 
 **2. Installer : un fichier, deux clés qui ne sortent jamais.** L'installateur crée deux clés ed25519 dans `~/.local/share/vision-noeud`, une pour le nœud et une pour le portefeuille. Le portefeuille n'est servi que sur la machine (`http://127.0.0.1:8861/`) : seul votre compte peut signer, grâce à un secret local lisible par vous seul.
 
-![Capture de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
-*Capture réelle de l'explorateur.*
+![Une longue file de blocs de verre relus un à un par un fin faisceau blanc](docs/images/rejouer.jpg)
+*Illustration générée par IA (Manus).*
 
 **3. Rejouer toute la chaîne avant d'y croire.** Le nœud récupère la chaîne chez ses pairs du réseau local ou sur le miroir public, puis la rejoue depuis le bloc 0. Pour chaque bloc, il vérifie la hauteur, l'empreinte du bloc précédent, la racine de Merkle des transactions, l'empreinte des soldes et la signature du producteur (`ssh-keygen -Y`, espace dédié), avec la clé épinglée dans l'installateur. Au premier écart, la copie est refusée.
 
@@ -98,7 +102,7 @@ cat docs/installer-noeud-vision.sh.sha256
 
 **4. Mettre la puissance en commun.** Chaque nœud annonce sa machine (cartes, mémoire, cœurs, charge), signée par sa clé. Les annonces sont vérifiées puis additionnées ; une machine n'est comptée en ligne que si elle a répondu dans les deux dernières minutes. VISION n'exécute rien lui-même : les modèles d'IA tournent sur les machines, VISION recense la puissance et inscrit les preuves du travail fait.
 
-![Deux ordinateurs face à face ; un reçu scellé passe de l'un à l'autre](docs/images/verification.jpg)
+![Deux postes face à face, l'un dans l'ombre cyan, l'autre dans la lumière blanche ; entre eux, un reçu de verre scellé de vert](docs/images/verification.jpg)
 *Illustration générée par IA (Manus).*
 
 **5. Le travail d'une machine, vérifié par une autre.** Quand une machine termine une étape, une autre la rejoue et signe un reçu : réussi, échoué ou indéterminé. Sans reçu, pas de point.

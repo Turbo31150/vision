@@ -33,6 +33,7 @@ import os
 import re
 import secrets
 import shutil
+import ssl
 import socket
 import subprocess
 import sys
@@ -184,14 +185,19 @@ class Noeud:
         return self.J.adresse(self.pub(self.cle_portefeuille))
 
     # ── synchronisation (pair) ────────────────────────────────────────────────────────────────────
-    def http(self, url, donnees=None, delai=8):
-        """Échange borné avec un pair : http seulement (ni file:, ni https détourné), délai par lecture ET budget
-        total, 4 Mio au plus. Un pair qui répond au goutte-à-goutte est coupé au bout de budget_pair_s."""
+    def http(self, url, donnees=None, delai=8, miroir=False):
+        """Échange borné : http seulement avec un pair (ni file:, ni https détourné) ; https, certificat vérifié,
+        seulement pour lire un miroir public (miroir=True). Délai par lecture ET budget total, 4 Mio au plus.
+        Un correspondant qui répond au goutte-à-goutte est coupé au bout de budget_pair_s."""
         u = urllib.parse.urlsplit(url)
-        if u.scheme != "http" or not u.hostname:
-            raise ValueError(f"adresse de pair refusée : {url[:60]!r}")
+        permis = ("https",) if miroir else ("http",)
+        if u.scheme not in permis or not u.hostname:
+            raise ValueError(f"adresse refusée : {url[:60]!r}")
         corps = None if donnees is None else json.dumps(donnees).encode()
-        c = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=delai)
+        if u.scheme == "https":
+            c = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=delai, context=ssl.create_default_context())
+        else:
+            c = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=delai)
         def couper():
             try:
                 if c.sock is not None:
@@ -297,14 +303,14 @@ class Noeud:
             if info.get("vu") and time.time() - info["vu"] < 60:
                 continue    # un site statique n'a pas besoin d'être relu toutes les 5 s
             try:
-                i = self.http(m + "/info.json", delai=15)
+                i = self.http(m + "/info.json", delai=15, miroir=True)
                 info.update(vu=time.time(), hauteur=i.get("hauteur"), erreur=None, genere_le=i.get("genere_le"))
                 if i.get("bloc0") != self.cfg["bloc0_empreinte"]:
                     info["erreur"] = "miroir sur un autre bloc 0 : ignoré"
                     continue
                 with VERROU:
                     if not self.bloc0_chemin.exists():
-                        b0 = self.http(m + "/bloc0.json", delai=15)
+                        b0 = self.http(m + "/bloc0.json", delai=15, miroir=True)
                         tmp = self.bloc0_chemin.with_suffix(".tmp")
                         tmp.write_text(json.dumps(b0, ensure_ascii=False))
                         self.J.charger_bloc0(tmp)
@@ -315,7 +321,7 @@ class Noeud:
                     bloc0, blocs, _, _ = self.J.etat_courant()
                     if (i.get("hauteur") or 0) <= len(blocs):
                         continue
-                    tous = self.http(m + "/blocs.json", delai=30).get("blocs", [])
+                    tous = self.http(m + "/blocs.json", delai=30, miroir=True).get("blocs", [])
                     if [b["empreinte"] for b in tous[:len(blocs)]] != [b["empreinte"] for b in blocs]:
                         raise self.J.Refus("le miroir ne prolonge pas la chaîne locale")
                     nouveaux = tous[len(blocs):]
