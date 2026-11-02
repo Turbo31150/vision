@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VISION · explorateur de la chaîne d'essai</title>
+<link rel="icon" href="../icone.svg">
+<link rel="stylesheet" href="../style.css">
+<script defer src="explorateur.js"></script>
+</head>
+<body>
+<header class="haut">
+  <a class="marque" href="../"><img src="../icone.svg" alt="" width="26" height="26"><span>VISION <b>Explorateur</b></span></a>
+  <nav class="liens">
+    <a href="../">Le projet</a>
+    <a class="actif" href="./">Explorateur</a>
+    <a href="../#rejoindre">Rejoindre</a>
+    <a href="https://github.com/Turbo31150/vision">Code</a>
+  </nav>
+</header>
+<main class="page">
+  <div class="bandeau">Chaîne d'ESSAI : les unités n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
+
+  <h1>La chaîne, bloc par bloc</h1>
+  <p class="sous">Copie publique de la chaîne d'essai, signatures comprises. Connectez-vous avec l'adresse d'un portefeuille ou d'un nœud pour voir son compte : solde, abonnement, dépenses, matériel partagé et gains.</p>
+
+  <form class="recherche" id="form" role="search">
+    <input id="q" type="text" spellcheck="false" autocomplete="off" placeholder="Adresse te1…, nom de nœud, n° de bloc ou identifiant de transaction" aria-label="Recherche">
+    <button class="bouton primaire" type="submit">Se connecter / chercher</button>
+  </form>
+  <div id="message" class="message" hidden></div>
+
+  <section id="compte" hidden>
+    <h2 id="compte-titre">Compte</h2>
+    <p class="vide mono" id="compte-adresse"></p>
+    <div class="kpis" id="compte-kpis"></div>
+    <div class="grille" style="margin-top:14px">
+      <div class="carte"><h3>Abonnement et forfaits</h3><div id="compte-forfaits"></div></div>
+      <div class="carte"><h3>Nœuds et matériel partagé</h3><div id="compte-noeuds"></div></div>
+    </div>
+    <div class="carte" style="margin-top:14px"><h3>Opérations</h3><div id="compte-historique"></div></div>
+  </section>
+
+  <h2>Le réseau</h2>
+  <div class="kpis" id="kpis"></div>
+  <p class="vide" id="date"></p>
+  <div class="carte" style="margin-top:14px"><h3>Nœuds inscrits</h3><div id="noeuds"></div></div>
+  <div class="carte" style="margin-top:14px"><h3>Époque en cours <span class="badge" id="epoque-badge"></span></h3><div id="epoque"></div></div>
+
+  <h2>Blocs</h2>
+  <div id="blocs"></div>
+</main>
+<footer>Données : <a href="../chaine/blocs.json">blocs.json</a> · <a href="../chaine/bloc0.json">bloc0.json</a> · <a href="../chaine/etat.json">etat.json</a> · <a href="../chaine/info.json">info.json</a>. Un nœud les rejoue et les vérifie lui-même.</footer>
+</body>
+</html>

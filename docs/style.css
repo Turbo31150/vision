@@ -1,0 +1,88 @@
+:root{--fond:#0b0e14;--carte:#111722;--bord:#1d2636;--texte:#e4e8ef;--doux:#8b96aa;--cyan:#00b4eb;--vert:#3fcf8e;--rouge:#ff5d6c;--or:#e0b252;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--fond);color:var(--texte);font:16px/1.55 "Noto Sans","Ubuntu","Segoe UI",system-ui,sans-serif}
+a{color:var(--cyan)}
+code,pre,.mono{font-family:"Ubuntu Mono","DejaVu Sans Mono",ui-monospace,monospace}
+.page{max-width:1120px;margin:0 auto;padding:0 20px 64px}
+header.haut{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid var(--bord);max-width:1120px;margin:0 auto}
+.marque{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;text-decoration:none;color:var(--texte)}
+.marque b{color:var(--cyan)}
+nav.liens{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+nav.liens a{padding:7px 12px;border-radius:8px;text-decoration:none;color:var(--doux)}
+nav.liens a:hover,nav.liens a.actif{color:var(--texte);background:var(--carte)}
+.bandeau{margin:20px 0;padding:10px 14px;border:1px solid #4a3c1c;background:#1a160c;color:var(--or);border-radius:10px;font-size:14px}
+h1{font-size:clamp(30px,5vw,52px);line-height:1.08;margin:42px 0 14px;letter-spacing:-.01em}
+h2{font-size:clamp(22px,3vw,30px);margin:48px 0 14px}
+h3{margin:0 0 6px;font-size:18px}
+.sous{color:var(--doux);font-size:clamp(16px,2vw,20px);max-width:760px}
+.k{font:600 13px/1 "Ubuntu Mono",monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan)}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}
+.carte{background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:18px}
+.carte p{margin:6px 0 0;color:var(--doux)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin-top:22px}
+.kpi{background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:14px 16px}
+.kpi .val{font-size:26px;font-weight:700}
+.kpi .lib{font-size:13px;color:var(--doux)}
+.kpi.cyan .val{color:var(--cyan)}.kpi.vert .val{color:var(--vert)}.kpi.rouge .val{color:var(--rouge)}
+.boutons{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.bouton{display:inline-block;padding:10px 18px;border-radius:9px;border:1px solid var(--bord);background:var(--carte);color:var(--texte);text-decoration:none;font-weight:600;cursor:pointer;font-size:15px}
+.bouton.primaire{background:var(--cyan);border-color:var(--cyan);color:#04121a}
+ol.etapes{padding-left:22px}
+ol.etapes li{margin:10px 0}
+pre{background:#05070b;border:1px solid var(--bord);border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:14px;line-height:1.5}
+.fait{color:var(--vert)}.prochain{color:var(--cyan)}.plus-tard{color:var(--doux)}
+ul.route{list-style:none;padding:0;margin:0}
+ul.route li{padding:10px 0;border-bottom:1px solid var(--bord)}
+ul.route li b{display:inline-block;min-width:96px}
+.table-boite{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--bord);vertical-align:top}
+th{color:var(--doux);font-weight:500}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.plus{color:var(--vert)}.moins,.detruit{color:var(--rouge)}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid var(--bord);color:var(--doux)}
+.badge.ok{color:var(--vert);border-color:#1f5c43}.badge.ko{color:var(--rouge);border-color:#5c1f28}
+form.recherche{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+form.recherche input{flex:1 1 360px;min-width:0;padding:11px 13px;border-radius:9px;border:1px solid var(--bord);background:#05070b;color:var(--texte);font:15px "Ubuntu Mono",monospace}
+.bloc{border:1px solid var(--bord);border-radius:10px;margin-top:8px;background:#0d121b}
+.bloc-tete{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:10px 12px;cursor:pointer}
+.bloc-tete .h{color:var(--cyan);font-weight:700}
+.bloc-detail{padding:0 12px 12px}
+.message{margin-top:12px;padding:10px 12px;border-radius:9px;font-size:14px}
+.message.ok{background:#0f2219;color:var(--vert)}.message.ko{background:#2a1015;color:var(--rouge)}
+.vide{color:var(--doux);font-size:14px}
+footer{max-width:1120px;margin:0 auto;padding:22px 20px 40px;color:var(--doux);font-size:13px;border-top:1px solid var(--bord)}
+[hidden]{display:none!important}
+/* ── v0.5.1 : héros avec schéma, grille de trois, circuit d'une unité, capture ── */
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:28px;align-items:center}
+@media (max-width:860px){.hero{grid-template-columns:1fr}}
+.schema{margin:24px 0 0;color:var(--doux)}
+.schema svg{width:100%;height:auto;display:block;max-width:440px;margin:0 auto}
+.schema .machine rect{fill:var(--carte);stroke:#2a3a52;stroke-width:1.5}
+.schema .chaine>rect:first-child{fill:#0d1a24;stroke:var(--cyan);stroke-width:1.5}
+.schema .bloc{fill:#0e3b4d;stroke:var(--cyan);stroke-width:1}
+.schema .bloc.dernier{fill:var(--cyan)}
+.schema .lien-chaine{stroke:var(--cyan);color:var(--cyan)}
+.schema .lien-recu{stroke:var(--vert);color:var(--vert)}
+.schema .t-titre{fill:var(--texte);font:600 15px "Noto Sans","Ubuntu",sans-serif}
+.schema .t-petit{fill:var(--doux);font:12px "Ubuntu Mono",monospace}
+.schema .t-recu{fill:var(--vert);font:12px "Ubuntu Mono",monospace}
+.grille.trois{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+ol.circuit-unite{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px;counter-reset:none}
+ol.circuit-unite li{position:relative;background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:18px 18px 18px 18px;display:flex;flex-direction:column;gap:6px}
+ol.circuit-unite li .n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 15px "Ubuntu Mono",monospace;background:#0e3b4d;color:var(--cyan);border:1px solid var(--cyan)}
+ol.circuit-unite li:nth-child(3) .n{background:#3b1219;color:var(--rouge);border-color:var(--rouge)}
+ol.circuit-unite li:nth-child(4) .n{background:#0f2b20;color:var(--vert);border-color:var(--vert)}
+ol.circuit-unite li b{font-size:17px}
+ol.circuit-unite li span:last-child{color:var(--doux);font-size:15px}
+.capture{margin:0;border:1px solid var(--bord);border-radius:12px;overflow:hidden;background:var(--carte)}
+.capture img{display:block;width:100%;height:auto}
+.capture-bloc p{margin-top:10px}
+/* explorateur */
+.puces{display:inline-flex;gap:6px;flex-wrap:wrap}
+.puce{font-size:12px;padding:2px 8px;border-radius:999px;background:#152031;color:var(--doux);border:1px solid var(--bord)}
+.puce.depense{color:var(--rouge);border-color:#5c1f28}.puce.forfait,.puce.achat{color:var(--cyan);border-color:#1d4b5c}
+.puce.recompense,.puce.epoque{color:var(--vert);border-color:#1f5c43}.puce.inscription{color:var(--or);border-color:#5c4a1f}
+.barre{height:8px;border-radius:999px;background:#152031;overflow:hidden;margin:10px 0 4px}
+.barre>span{display:block;height:100%;background:var(--cyan)}

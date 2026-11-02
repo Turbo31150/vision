@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VISION · Portefeuille</title>
+<link rel="icon" href="icone.svg">
+<link rel="stylesheet" href="app.css">
+<script defer src="app.js"></script>
+</head>
+<body>
+<header class="haut">
+  <div class="marque"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Portefeuille</b></span></div>
+  <nav class="onglets" id="onglets">
+    <button data-vue="apercu" class="actif">Vue d'ensemble</button>
+    <button data-vue="portefeuille">Portefeuille</button>
+    <button data-vue="compte">Mon compte</button>
+    <button data-vue="puissance">Partage de puissance</button>
+    <button data-vue="reseau">Réseau</button>
+    <button data-vue="blocs">Blocs</button>
+    <button data-vue="noeud">Nœud</button>
+  </nav>
+  <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION · essai</span></div>
+</header>
+
+<main>
+  <div class="bandeau-essai">Chaîne d'ESSAI : unités sans valeur, rien n'est vendu ni offert au public. Achat réel fermé tant que le bloc 0 n'est pas gelé.</div>
+
+  <section id="vue-apercu" class="vue actif">
+    <div class="grille-kpi" id="kpis"></div>
+    <div class="deux">
+      <div class="carte">
+        <h2>Comment circule une unité</h2>
+        <ol class="circuit">
+          <li><b>Forfait</b> : payé en euros uniquement, il crédite des unités d’usage non cessibles, prises sur la réserve « usage » (essai : aucune somme encaissée).</li>
+          <li><b>Utilisation</b> : chaque demande servie par l’assistant du cockpit coûte 1 unité (8 pour une table ronde, 0 pour l’état).</li>
+          <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve qui paie les époques.</li>
+          <li><b>Partage de puissance</b> : à chaque fin d'époque (mercredi 12:00 UTC), le budget de la semaine est partagé au prorata des points : travail validé par un reçu indépendant (secondes de calcul × 2 si rejeu exact) et validations signées. Le budget est divisé par deux chaque année, sur 4 ans.</li>
+          <li><b>Aucun transfert</b> entre comptes, aucune frappe : l'offre ne fait que décroître.</li>
+        </ol>
+      </div>
+      <div class="carte">
+        <h2>Derniers blocs</h2>
+        <div id="apercu-blocs" class="liste-blocs"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-portefeuille" class="vue">
+    <div class="carte solde-carte">
+      <div class="solde-libelle">Solde</div>
+      <div class="solde"><span id="solde">—</span> <small>TURBO-essai</small></div>
+      <div class="adresse-ligne"><code id="adresse">—</code><button class="petit" id="copier">Copier</button></div>
+      <div class="actions">
+        <button class="primaire" id="btn-depenser">Dépenser</button>
+        <button id="btn-acheter">Acheter un forfait</button>
+        <button id="btn-recevoir">Recevoir</button>
+      </div>
+      <div id="formulaire" class="formulaire" hidden></div>
+      <div id="message" class="message" hidden></div>
+    </div>
+    <div class="carte">
+      <h2>En attente d'un bloc</h2>
+      <div id="attente" class="vide">Rien en attente.</div>
+      <h2>Historique <a class="lien-csv" href="/api/historique.csv" download>Exporter en CSV</a></h2>
+      <div id="historique"></div>
+    </div>
+    <div class="carte">
+      <h2>Sauvegarde de la clé</h2>
+      <p class="note">Ce portefeuille tient dans une seule clé, gardée sur cette machine. Elle ne quitte jamais le nœud et personne ne peut la recréer : sans elle, le solde est perdu.</p>
+      <code id="fichier-cle" class="fichier-cle">—</code>
+      <ol class="circuit">
+        <li><b>Sauvegarder</b> : copiez ce fichier et son <code>.pub</code> sur un support chiffré.</li>
+        <li><b>Restaurer</b> : remettez les deux fichiers au même endroit, puis relancez le nœud. L'installateur ne remplace jamais une clé existante.</li>
+        <li><b>Vérifier</b> : l'adresse affichée en haut de cette page doit redevenir la vôtre.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="vue-compte" class="vue">
+    <div class="carte">
+      <h2>Se connecter avec une adresse</h2>
+      <p class="note">Entrez le numéro d'un portefeuille (te1…) ou d'un nœud : tout ce que la chaîne sait de lui s'affiche, contrôlé bloc par bloc par ce nœud. La consultation est libre ; seule la clé gardée sur la machine peut signer une dépense.</p>
+      <form id="form-compte" class="ligne-adresse">
+        <input id="saisie-adresse" type="text" spellcheck="false" autocomplete="off" placeholder="te1… (40 caractères hexadécimaux)" maxlength="43">
+        <button class="primaire" type="submit">Se connecter</button>
+        <button type="button" id="btn-mon-adresse">Mon adresse</button>
+      </form>
+      <div id="message-compte" class="message" hidden></div>
+    </div>
+    <div id="compte" hidden>
+      <div class="grille-kpi" id="kpis-compte"></div>
+      <div class="deux">
+        <div class="carte"><h2>Abonnement et forfaits</h2><div id="compte-forfaits"></div></div>
+        <div class="carte"><h2>Nœuds et matériel partagé</h2><div id="compte-noeuds"></div></div>
+      </div>
+      <div class="carte"><h2>Opérations sur la chaîne</h2><div id="compte-historique"></div></div>
+    </div>
+  </section>
+
+  <section id="vue-puissance" class="vue">
+    <div class="deux">
+      <div class="carte">
+        <h2>Cette machine</h2>
+        <div id="gpus"></div>
+        <p class="note" id="regle-puissance"></p>
+        <div class="actions"><button class="primaire" id="btn-inscrire">Inscrire ce nœud au registre</button></div>
+        <div id="message-inscription" class="message" hidden></div>
+      </div>
+      <div class="carte">
+        <h2>Gains du nœud <span id="solde-noeud" class="badge"></span></h2>
+        <div id="gains"></div>
+      </div>
+    </div>
+    <div class="carte">
+      <h2>Époque en cours <span id="epoque-badge" class="badge"></span></h2>
+      <div id="epoque"></div>
+      <h2>Époques closes</h2>
+      <div id="epoques-closes"></div>
+    </div>
+    <div class="carte">
+      <h2>Nœuds du réseau</h2>
+      <div id="classement"></div>
+      <p class="note">Le partage de puissance passe par des missions orchestrées et revérifiées par d'autres machines : aucun pair ne peut faire exécuter quoi que ce soit sur une machine par le réseau.</p>
+    </div>
+  </section>
+
+  <section id="vue-reseau" class="vue">
+    <div class="grille-kpi" id="kpis-reseau"></div>
+    <div class="carte"><h2>Machines et nœuds <span id="reseau-badge" class="badge"></span></h2><div id="reseau-noeuds"></div>
+      <p class="note">Chaque nœud annonce lui-même sa machine (GPU, cœurs, mémoire, charge). Une machine qui porte deux nœuds ne compte qu'une fois dans la puissance cumulée. Un nœud n'est actif que s'il a répondu dans les deux dernières minutes, sur le même bloc 0.</p></div>
+  </section>
+
+  <section id="vue-blocs" class="vue">
+    <div class="carte"><h2>Explorateur de blocs</h2><div id="blocs"></div></div>
+  </section>
+
+  <section id="vue-noeud" class="vue">
+    <div class="deux">
+      <div class="carte"><h2>Ce nœud</h2><dl id="infos-noeud" class="cv"></dl>
+        <div class="actions"><button id="btn-synchro">Synchroniser maintenant</button></div></div>
+      <div class="carte"><h2>Pairs</h2><div id="pairs"></div>
+        <p class="note">Les blocs se vérifient d'eux-mêmes (empreintes, Merkle, signature du producteur épinglée) : les nœuds se parlent en direct, sans réseau privé. Tailscale reste un repli.</p></div>
+    </div>
+    <div class="carte"><h2>Rejoindre le réseau</h2>
+      <div id="miroirs"></div>
+      <p class="note">Un nœud installé hors du réseau local lit la chaîne sur le miroir public et la rejoue en entier. Pour entrer au registre, il prépare une demande d'inscription signée par sa clé (données publiques seulement) et la dépose en ticket sur le dépôt ; le producteur l'importe au prochain passage.</p>
+      <div class="actions"><button id="btn-demande">Préparer ma demande d'inscription</button></div>
+      <div id="demande" hidden></div>
+    </div>
+    <div class="carte"><h2>Journal du nœud</h2><pre id="journal" class="journal"></pre></div>
+  </section>
+</main>
+
+<footer class="etat">
+  <span><span class="pastille" id="pastille-synchro"></span><span id="etat-synchro">connexion…</span></span>
+  <span id="etat-hauteur"></span>
+  <span id="etat-pairs"></span>
+  <span id="etat-role"></span>
+  <span id="etat-version"></span>
+  <span class="droite">ESSAI · sans valeur</span>
+</footer>
+</body>
+</html>

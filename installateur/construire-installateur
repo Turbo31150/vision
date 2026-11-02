@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Construit docs/installer-noeud-vision.sh à partir de ce dépôt : modèle + archive (nœud, outil de chaîne, portefeuille).
+# La clé publique du producteur et l'empreinte du bloc 0 viennent du miroir public (docs/chaine/info.json) :
+# n'importe qui peut reconstruire l'installateur et comparer son empreinte sha256 à celle qui est publiée.
+#   installateur/construire-installateur [URL-du-miroir] [propriétaire/dépôt]
+set -euo pipefail
+RACINE=$(cd "$(dirname "$0")/.." && pwd)
+MIROIR=${1:-https://turbo31150.github.io/vision/chaine}
+DEPOT=${2:-Turbo31150/vision}
+INFO="$RACINE/docs/chaine/info.json"
+PUB=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['producteur_pub'])" "$INFO")
+B0=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['bloc0'])" "$INFO")
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+cp "$RACINE/noeud/turbo-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/chaine/jeton-chaine" "$T/"
+cp -r "$RACINE/noeud/ui" "$T/ui"
+SORTIE="$RACINE/docs/installer-noeud-vision.sh"
+# date fixe = celle du bloc de tête : deux constructions du même état donnent le même fichier
+DATE=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['genere_le'][:10])" "$INFO")
+sed -e "s|@@PRODUCTEUR_PUB@@|$PUB|" -e "s|@@BLOC0@@|$B0|g" -e "s|@@PAIR@@||" -e "s|@@MIROIR@@|$MIROIR|" -e "s|@@DEPOT@@|$DEPOT|" \
+    -e "s|@@DATE@@|$DATE|" -e "s|@@PRODUCTEUR_COURT@@|${PUB:12:24}…|" "$RACINE/installateur/installateur.sh.modele" > "$SORTIE"
+tar -C "$T" --sort=name --mtime="$DATE 00:00Z" --owner=0 --group=0 --numeric-owner -c . | gzip -n | base64 -w 76 >> "$SORTIE"
+chmod 755 "$SORTIE"
+(cd "$RACINE/docs" && sha256sum installer-noeud-vision.sh > installer-noeud-vision.sh.sha256)
+echo "installateur : $SORTIE ($(du -h "$SORTIE" | cut -f1)) · miroir $MIROIR · dépôt $DEPOT"
+cat "$RACINE/docs/installer-noeud-vision.sh.sha256"

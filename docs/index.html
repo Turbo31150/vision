@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VISION · nœud, portefeuille et partage de puissance</title>
+<meta name="description" content="VISION, réseau d'essai de Turbo OS : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve.">
+<link rel="icon" href="icone.svg">
+<link rel="stylesheet" href="style.css">
+<script defer src="projet.js"></script>
+</head>
+<body>
+<header class="haut">
+  <a class="marque" href="./"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Réseau</b></span></a>
+  <nav class="liens">
+    <a class="actif" href="./">Le projet</a>
+    <a href="#fonctionnement">Fonctionnement</a>
+    <a href="explorateur/">Explorateur</a>
+    <a href="#rejoindre">Rejoindre</a>
+    <a href="https://github.com/Turbo31150/vision">Code</a>
+  </nav>
+</header>
+<main class="page">
+  <div class="bandeau">Chaîne d'ESSAI : les unités n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
+
+  <section class="hero">
+    <div>
+      <div class="k">VISION · IA locale</div>
+      <h1>Plusieurs machines, une seule puissance, récompensée sur preuve.</h1>
+      <p class="sous">VISION relie des machines équipées de cartes graphiques pour faire tourner des modèles d'IA en local. Chaque machine installe un nœud et son portefeuille ; le travail de l'une n'est compté qu'après avoir été revérifié par une autre.</p>
+      <div class="boutons">
+        <a class="bouton primaire" href="#rejoindre">Installer un nœud</a>
+        <a class="bouton" href="explorateur/">Voir la chaîne et les blocs</a>
+      </div>
+    </div>
+    <figure class="schema" aria-label="Schéma : trois machines, chacune avec son nœud et son portefeuille, autour d'une chaîne de blocs signés ; chaque travail est revérifié par une autre machine qui signe un reçu.">
+      <svg viewBox="0 0 440 360" role="img">
+        <title>Trois machines autour d'une même chaîne</title>
+        <defs>
+          <marker id="fl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <g class="lien-chaine" stroke-width="2" fill="none">
+          <line x1="110" y1="92" x2="188" y2="160" marker-end="url(#fl)"/>
+          <line x1="330" y1="92" x2="252" y2="160" marker-end="url(#fl)"/>
+          <line x1="220" y1="282" x2="220" y2="232" marker-end="url(#fl)"/>
+        </g>
+        <g class="lien-recu" stroke-width="2" fill="none" stroke-dasharray="5 5">
+          <path d="M160 52 Q220 18 280 52" marker-end="url(#fl)"/>
+          <path d="M372 112 Q410 230 290 300" marker-end="url(#fl)"/>
+        </g>
+        <text class="t-recu" x="220" y="26" text-anchor="middle">reçu signé</text>
+        <text class="t-recu" x="408" y="214" text-anchor="end">reçu signé</text>
+        <g class="machine"><rect x="20" y="40" width="140" height="62" rx="10"/><text x="90" y="66" text-anchor="middle" class="t-titre">Machine A</text><text x="90" y="86" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
+        <g class="machine"><rect x="280" y="40" width="140" height="62" rx="10"/><text x="350" y="66" text-anchor="middle" class="t-titre">Machine B</text><text x="350" y="86" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
+        <g class="machine"><rect x="150" y="282" width="140" height="62" rx="10"/><text x="220" y="308" text-anchor="middle" class="t-titre">Machine C</text><text x="220" y="328" text-anchor="middle" class="t-petit">nœud · portefeuille</text></g>
+        <g class="chaine">
+          <rect x="150" y="162" width="140" height="68" rx="12"/>
+          <rect x="166" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="198" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="230" y="178" width="22" height="22" rx="4" class="bloc"/><rect x="262" y="178" width="14" height="22" rx="4" class="bloc dernier"/>
+          <text x="220" y="220" text-anchor="middle" class="t-petit">blocs signés, rejoués</text>
+        </g>
+      </svg>
+    </figure>
+  </section>
+
+  <div class="kpis" id="kpis" aria-live="polite"></div>
+  <p class="vide" id="kpis-date"></p>
+
+  <h2 id="fonctionnement">Ce qui tourne déjà</h2>
+  <div class="grille trois">
+    <div class="carte"><div class="k">Le nœud</div><h3>Un fichier, sans droits d'administrateur</h3>
+      <p>L'installateur crée deux clés sur votre machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais. Le nœud rejoue toute la chaîne depuis le bloc 0 et refuse ce qui ne se vérifie pas.</p></div>
+    <div class="carte"><div class="k">Le portefeuille</div><h3>Un portefeuille de bureau</h3>
+      <p>Servi uniquement sur la machine : solde, adresse, dépenses signées, blocs, réseau, puissance partagée. On s'y connecte avec une adresse pour voir un compte tel que la chaîne le connaît.</p></div>
+    <div class="carte"><div class="k">Les unités d'usage</div><h3>Dépensées, signées, en partie détruites</h3>
+      <p>Un service rendu par le réseau se règle par une dépense signée par le portefeuille. 20 % sont détruits, 80 % reviennent à la réserve qui récompense les machines. Aucun transfert entre comptes.</p></div>
+    <div class="carte"><div class="k">Le partage de puissance</div><h3>Chaque nœud annonce sa machine</h3>
+      <p>Cartes, mémoire, cœurs, charge : les annonces signées sont vérifiées puis additionnées. Le portefeuille et l'explorateur montrent les machines, les nœuds et la puissance cumulée.</p></div>
+    <div class="carte"><div class="k">La récompense</div><h3>Sur preuve, jamais sur déclaration</h3>
+      <p>Un travail compte quand une autre machine l'a rejoué et a signé un reçu. Chaque semaine, le budget de l'époque se partage au prorata des points ; il est divisé par deux chaque année.</p></div>
+    <div class="carte"><div class="k">L'explorateur</div><h3>Tout est public et vérifiable</h3>
+      <p>Blocs, transactions, nœuds inscrits et soldes sont publiés avec leurs signatures. Un nœud lit cette copie et la rejoue lui-même : elle ne peut rien lui imposer.</p></div>
+  </div>
+
+  <h2>Le circuit d'une unité</h2>
+  <ol class="circuit-unite">
+    <li><span class="n">1</span><b>Créditée</b><span>Dans la conception, par un forfait payé en euros et converti. Pendant l'essai : factures d'essai seulement, aucune somme encaissée.</span></li>
+    <li><span class="n">2</span><b>Dépensée</b><span>Une réponse d'un modèle, une lecture d'image : le portefeuille signe la dépense, le producteur la scelle dans un bloc.</span></li>
+    <li><span class="n">3</span><b>Détruite à 20 %</b><span>Le reste retourne à la réserve d'usage. L'offre en circulation ne fait que décroître.</span></li>
+    <li><span class="n">4</span><b>Rendue aux machines</b><span>À la clôture de l'époque (mercredi 12:00 UTC), la réserve récompense le travail vérifié et les vérifications signées.</span></li>
+  </ol>
+
+  <h2>Le portefeuille, connecté par adresse</h2>
+  <div class="capture-bloc">
+    <figure class="capture"><img src="portefeuille-compte.png" width="1280" height="640" alt="Portefeuille VISION, onglet Mon compte : connexion avec l'adresse du nœud m6, solde, abonnement, unités dépensées et détruites, nœud rattaché avec son matériel partagé (GTX 1660 Super et Quadro RTX 4000) et 220 unités gagnées."></figure>
+    <p class="vide">Capture réelle du portefeuille, 2 novembre 2026 : connexion avec l'adresse du nœud m6. On y lit son matériel partagé et ce qu'il a gagné en revérifiant le travail des autres.</p>
+  </div>
+
+  <h2>Le parc en ce moment</h2>
+  <div class="carte"><div id="parc" class="table-boite"><p class="vide">Chargement…</p></div>
+    <p class="vide" style="margin-top:10px">Chaque nœud annonce lui-même sa machine. Un nœud n'est actif que s'il a répondu dans les deux dernières minutes.</p></div>
+
+  <h2 id="rejoindre">Rejoindre le réseau</h2>
+  <p class="sous">Linux, Python 3.10 ou plus récent et <code>ssh-keygen</code> (paquet openssh-client). Tout s'installe dans votre dossier personnel.</p>
+  <ol class="etapes">
+    <li>Téléchargez l'installateur et vérifiez son empreinte :
+<pre>curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh
+curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
+sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
+    <li>Lisez-le (c'est un script shell suivi d'une archive du code de ce dépôt), puis lancez-le :
+<pre>bash installer-noeud-vision.sh --nom mon-noeud</pre></li>
+    <li>Ouvrez le portefeuille : <code>http://127.0.0.1:8861/</code> (ou l'icône « VISION Portefeuille » du menu). Le nœud lit la chaîne sur ce site et la rejoue.</li>
+    <li>Onglet <b>Nœud</b> → <b>Préparer ma demande d'inscription</b> : la transaction, signée par la clé de votre nœud, s'ouvre en ticket sur le dépôt. Elle ne contient que des données publiques. Le producteur l'importe ; votre nœud entre alors au registre, rattaché à votre portefeuille.</li>
+  </ol>
+  <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code> (vos clés restent dans <code>~/.local/share/turbo-noeud</code>).</p>
+
+  <h2>Ce que VISION n'est pas</h2>
+  <div class="grille trois">
+    <div class="carte"><h3>Pas une monnaie</h3><p>Les unités ne se transfèrent pas d'un compte à l'autre et n'ont aucune valeur : il n'y a rien à échanger.</p></div>
+    <div class="carte"><h3>Pas une vente</h3><p>Aucune unité n'est vendue ni offerte au public. Aucune promesse de gain, de prix ou de rendement.</p></div>
+    <div class="carte"><h3>Pas un accès à votre machine</h3><p>Un pair ne peut rien faire exécuter sur votre machine : le réseau n'échange que des blocs et des transactions signés.</p></div>
+  </div>
+
+  <h2>Feuille de route</h2>
+  <ul class="route">
+    <li><b class="fait">Fait</b> Chaîne d'essai signée, nœud, installateur en un fichier, portefeuille de bureau avec connexion par adresse, partage de puissance mesuré sur 3 machines et 6 GPU, règles de récompense par époque, explorateur public.</li>
+    <li><b class="prochain">04/11</b> Première clôture d'époque, recalculée par chaque nœud.</li>
+    <li><b class="prochain">Ensuite</b> Témoins tenus par d'autres propriétaires, chiffrement du transport entre nœuds, traversée des box (NAT), inscription des nœuds sans intervention manuelle.</li>
+    <li><b class="plus-tard">Plus tard</b> Gel du bloc 0 et usage réel, seulement quand les conditions réglementaires seront réunies et prouvées. D'ici là, rien n'est en vente.</li>
+  </ul>
+
+  <h2>Limites connues</h2>
+  <div class="carte">
+    <p>Un seul producteur de blocs (preuve d'autorité). Aucun audit externe à ce jour. Le transport entre nœuds n'est pas chiffré (les blocs, eux, sont signés). Compter des secondes de calcul reste une mesure approchée de la valeur du travail. Les critiques sont bienvenues : ouvrez un ticket sur le dépôt.</p>
+  </div>
+</main>
+<footer>VISION · réseau d'essai de Turbo OS · code et données publiés sur <a href="https://github.com/Turbo31150/vision">github.com/Turbo31150/vision</a></footer>
+</body>
+</html>

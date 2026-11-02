@@ -1,0 +1,1022 @@
+#!/usr/bin/env python3
+"""jeton-chaine — chaîne de blocs D'ESSAI du jeton Turbo OS (TURBO-essai), posée sur le bloc 0 de `jeton-genese`.
+
+Une chaîne à autorité (m0 produit, les témoins M1 et M6 cosignent) qui déroule les règles du bloc 0 :
+  * bloc 1 = genèse d'essai : les 100 000 000 unités du bloc 0 sont réparties dans ses 7 réserves ;
+  * seule la réserve « usage » circule tant que le bloc 0 n'est pas gelé ; les six autres restent bloquées ;
+  * achat     : crédits internes payés en euros, convertis en unités prises sur la réserve usage
+                (bloc 0 : « conversion des crédits internes ») ; en essai, la facture doit commencer par ESSAI- ;
+  * dépense   : un compte paie un service ; 20 % des unités sont détruites (règle du bloc 0), 80 % vont au nœud
+                qui a fait le calcul, ou retournent à la réserve usage si aucun nœud n'est nommé ;
+  * récompense: partage de puissance ; une étape de mission VISION exécutée par une machine et validée par un
+                reçu PASS indépendant (sans FAIL) rapporte 1 unité par seconde de calcul, une seule fois ;
+  * aucune frappe, aucun transfert entre comptes, aucun retrait vers l'extérieur.
+
+Chaque bloc : hauteur, empreinte du précédent (le bloc 0 pour le bloc 1), racine de Merkle des transactions,
+empreinte des soldes après le bloc, signature ssh-keygen (espace `turbo-jeton-bloc`). `verifier` rejoue tout depuis
+le bloc 0 : liens, racines, signatures, règles, conservation de l'offre (soldes + détruit = 100 000 000).
+Un témoin (`cosigner`) rejoue la même vérification sur sa copie avec la clé du producteur qu'il a épinglée, puis signe
+la tête avec SA clé (espace `turbo-jeton-cosignature`) ; sa clé privée ne quitte pas sa machine.
+
+ESSAI : unités sans valeur, rien n'est vendu ni offert au public ; voir CONFORMITE-MICA.md (5 conditions).
+
+  jeton-chaine init                         genèse d'essai (bloc 1), une seule fois
+  jeton-chaine acheter  --compte C --unites N --facture ESSAI-… [--euros E]
+  jeton-chaine depenser --compte C --unites N --service S [--noeud M]
+  jeton-chaine recompenser                  récompenses des étapes VISION validées, pas encore payées
+  jeton-chaine sceller                      transactions en attente → bloc signé
+  jeton-chaine verifier | soldes | etat | exporter [--sortie F]
+  jeton-chaine collecter                    fait cosigner la tête par les témoins (ssh)
+  jeton-chaine changer-cle --nouvelle K --motif M   déclare la clé des blocs suivants (nœud producteur arrêté)
+  jeton-chaine temoin-init --dossier D --machine M --producteur-pub "<clé publique>"   (sur le témoin)
+  jeton-chaine cosigner   --dossier D < paquet.json                                     (sur le témoin)
+
+Variables : JETON_CHAINE (dossier), JETON_BLOC0, JETON_CLE, JETON_VISION (tests). Codes : 0 fait, 1 refus, 2 outil.
+"""
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+ACCUEIL = Path.home()
+DOSSIER = Path(os.environ.get("JETON_CHAINE", ACCUEIL / ".local/share/vision/chaine-essai"))
+BLOC0 = Path(os.environ.get("JETON_BLOC0", ACCUEIL / ".local/share/vision/bloc0.json"))
+CLE = Path(os.environ.get("JETON_CLE", ACCUEIL / ".ssh/producteur_chaine_ed25519"))   # dédiée aux blocs d'essai, rien d'autre
+VISION = Path(os.environ.get("JETON_VISION", "/nonexistent"))
+CHAINE = "turbo-jeton-essai"
+FORMAT = "turbo-jeton-bloc/1"
+ESPACE_BLOC = "turbo-jeton-bloc"
+ESPACE_COSIGN = "turbo-jeton-cosignature"
+ESPACE_CLE = "turbo-jeton-cle"
+PRODUCTEUR = "m0"
+ACTIVES = {"reserve:usage"}          # seule réserve qui circule tant que le bloc 0 n'est pas gelé
+DESTRUCTION_PCT = 20                 # bloc 0 : 20 % des unités dépensées sont détruites
+TAUX_SECONDE = 1                     # récompense : unités par seconde de calcul vérifiée
+
+# ── Règles v2 (02/11/2026) : rétribution par époque, alignée sur le livre blanc (§8 ter, §11, TOKENOMIE) et Qubic ──
+# Époque de 7 jours, frontière le mercredi 12:00 UTC (comme Qubic). La réserve usage est libérée sur 4 ans
+# (208 époques), budget divisé par deux chaque année (halving) ; une époque n'émet que ce que l'usage vérifié justifie.
+# Deux scores, recalculables par tout nœud à partir de la transaction d'époque :
+#   travail    : secondes de calcul d'une étape validée (≥ 1 reçu PASS, aucun FAIL) × poids de la preuve
+#                (rejeu exact 2, propriétés 1) → au nœud qui a exécuté ;
+#   validation : 1 point par reçu PASS ou FAIL signé → au nœud qui a vérifié (INCONCLUSIVE ne paie rien).
+# Parts au prorata des points ; le reliquat d'arrondi et le budget non justifié restent dans la réserve (pas
+# d'« Arbitrator »). Les dépenses ne paient plus un nœud directement : 20 % détruits, 80 % recyclés dans la réserve.
+EPOQUE_0 = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)   # mercredi 12:00 UTC
+EPOQUE_S = 7 * 24 * 3600
+EPOQUES_TOTAL = 208                  # 4 ans d'époques hebdomadaires
+BUDGET_0 = 358_974                   # 52 × B0 × (1 + ½ + ¼ + ⅛) ≈ 35 000 000 : la réserve usage sur 4 ans
+POIDS_GARANTIE = {"rejeu-exact": 2, "proprietes": 1}
+
+
+def fenetre(k):
+    d = EPOQUE_0.timestamp() + k * EPOQUE_S
+    f = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    return f(d), f(d + EPOQUE_S)
+
+
+def epoque_de(horodatage):
+    t = datetime.strptime(horodatage, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    return int((t - EPOQUE_0.timestamp()) // EPOQUE_S)
+
+
+def budget_epoque(k):
+    return 0 if not 0 <= k < EPOQUES_TOTAL else BUDGET_0 >> (k // 52)
+
+
+def points(c):
+    if c.get("role") == "travail":
+        return max(1, math.ceil(int(c["duree_ms"]) / 1000)) * TAUX_SECONDE * POIDS_GARANTIE.get(c.get("garantie"), 1)
+    if c.get("role") == "validation":
+        return 1
+    raise Refus(f"contribution de rôle inconnu : {c.get('role')!r}")
+
+
+def repartir(contributions, budget, disponible):
+    """Calcul déterministe d'une fin d'époque (l'équivalent de computeRevenue) : scores, émis, attributions."""
+    scores = {}
+    for c in contributions:
+        scores[c["noeud"]] = scores.get(c["noeud"], 0) + points(c)
+    justifie = sum(scores.values())
+    emis_max = min(budget, justifie, disponible)
+    attrib = {n: s * emis_max // justifie for n, s in sorted(scores.items())} if justifie else {}
+    attrib = {n: u for n, u in attrib.items() if u > 0}
+    return {"scores": dict(sorted(scores.items())), "justifie": justifie, "emis": sum(attrib.values()),
+            "attributions": attrib}
+TEMOINS = {"m6": ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "m6"],
+           "m1": ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "m1"]}
+DOSSIER_TEMOIN = "~/jeton-temoin"
+NOM = re.compile(r"[a-z0-9][a-z0-9._-]{0,47}")
+ZERO = "0" * 64
+
+
+class Refus(Exception):
+    pass
+
+
+# ── empreintes ──────────────────────────────────────────────────────────────────────────────────────
+def canon(x):
+    return json.dumps(x, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def sha(t):
+    return hashlib.sha256(t.encode() if isinstance(t, str) else t).hexdigest()
+
+
+def id_tx(tx):
+    return sha(canon({k: v for k, v in tx.items() if k != "id"}))
+
+
+def merkle(ids):
+    if not ids:
+        return sha("")
+    niveau = list(ids)
+    while len(niveau) > 1:
+        if len(niveau) % 2:
+            niveau.append(niveau[-1])
+        niveau = [sha(niveau[i] + niveau[i + 1]) for i in range(0, len(niveau), 2)]
+    return niveau[0]
+
+
+def corps(b):
+    return {k: v for k, v in b.items() if k not in ("empreinte", "signature")}
+
+
+def maintenant():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# ── signature ssh-keygen ────────────────────────────────────────────────────────────────────────────
+# Sans agent : un agent SSH de session (trousseau GNOME, gcr) peut attendre une saisie et bloquer la signature.
+SANS_AGENT = {k: v for k, v in os.environ.items() if k != "SSH_AUTH_SOCK"}
+
+
+def signer(texte, cle, espace):
+    with tempfile.TemporaryDirectory() as t:
+        f = Path(t) / "m"
+        f.write_text(texte)
+        r = subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(cle), "-n", espace, str(f)],
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL, env=SANS_AGENT, timeout=20)
+        if r.returncode:
+            raise Refus(f"signature impossible : {r.stderr.strip()[:200]}")
+        return (Path(t) / "m.sig").read_text()
+
+
+def verifier_sig(texte, signature, pub, identite, espace):
+    with tempfile.TemporaryDirectory() as t:
+        (Path(t) / "s").write_text(signature)
+        (Path(t) / "a").write_text(f'{identite} namespaces="{espace}" {pub}\n')
+        r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n", espace,
+                            "-s", str(Path(t) / "s")], input=texte, capture_output=True, text=True,
+                           env=SANS_AGENT, timeout=20)
+        return r.returncode == 0
+
+
+def pub_de(cle):
+    p = Path(str(cle) + ".pub")
+    if not p.exists():
+        raise Refus(f"clé publique absente : {p}")
+    a = p.read_text().split()
+    return f"{a[0]} {a[1]}"
+
+
+# ── état ────────────────────────────────────────────────────────────────────────────────────────────
+def lire_jsonl(f):
+    if not f.exists():
+        return []
+    return [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+
+
+def ecrire_jsonl(f, lignes):
+    f.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text("".join(canon(x) + "\n" for x in lignes))
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, f)
+
+
+def ajouter_jsonl(f, x):
+    f.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with open(f, "a", encoding="utf-8") as h:
+        h.write(canon(x) + "\n")
+    os.chmod(f, 0o600)
+
+
+ESPACE_TX = "turbo-jeton-tx"
+ADRESSE = re.compile(r"te1[0-9a-f]{40}")
+PUB = re.compile(r"ssh-ed25519 [A-Za-z0-9+/=]{60,80}")
+
+
+def adresse(pub):
+    """Adresse de portefeuille : te1 + 40 hex de l'empreinte de la clé publique ed25519 (« type base64 »)."""
+    p = " ".join(pub.split()[:2])
+    if not PUB.fullmatch(p):
+        raise Refus("clé publique ed25519 invalide")
+    return "te1" + sha(p)[:40]
+
+
+def message_tx(tx):
+    return canon({k: v for k, v in tx.items() if k not in ("id", "signature")})
+
+
+def signer_tx(tx, cle):
+    """Signe une transaction avec la clé d'un portefeuille ou d'un nœud. La clé privée reste où elle est."""
+    tx["signature"] = signer(message_tx(tx), cle, ESPACE_TX)
+    tx["id"] = id_tx(tx)
+    return tx
+
+
+def controler_signature(tx, identite):
+    if not PUB.fullmatch(" ".join(str(tx.get("cle", "")).split()[:2])):
+        raise Refus("transaction signée sans clé publique valide")
+    if not verifier_sig(message_tx(tx), tx.get("signature", ""), tx["cle"], identite, ESPACE_TX):
+        raise Refus("signature de la transaction invalide")
+
+
+def charger_bloc0(chemin=None):
+    b0 = json.loads(Path(chemin or BLOC0).read_text())
+    recalc = sha(json.dumps({k: v for k, v in b0.items() if k not in ("empreinte", "signature")},
+                            ensure_ascii=False, sort_keys=True))
+    if recalc != b0.get("empreinte"):
+        raise Refus("bloc 0 altéré : empreinte recalculée différente")
+    if sum(x["unites"] for x in b0["repartition"]) != b0["offre_totale"]:
+        raise Refus("bloc 0 incohérent : la répartition ne fait pas l'offre totale")
+    return b0
+
+
+def appliquer(soldes, tx, bloc0, preuves, gele=False):
+    """Applique une transaction aux soldes (dict modifié) ou lève Refus. Les règles du bloc 0 sont ici."""
+    t, n = tx.get("type"), tx.get("unites")
+    v2 = "regles:2" in preuves
+    if t not in ("allocation", "inscription", "regles", "epoque", "catalogue", "cle_producteur") and (
+            not isinstance(n, int) or isinstance(n, bool) or n <= 0 or n > bloc0["offre_totale"]):
+        raise Refus(f"{t} : unités invalides ({n!r})")
+
+    def debiter(compte, u):
+        if compte.startswith("reserve:") and compte not in ACTIVES and not gele:
+            raise Refus(f"{compte} est bloquée tant que le bloc 0 n'est pas gelé")
+        if soldes.get(compte, 0) < u:
+            raise Refus(f"solde insuffisant sur {compte} ({soldes.get(compte, 0)} < {u})")
+        soldes[compte] -= u
+
+    def crediter(compte, u):
+        soldes[compte] = soldes.get(compte, 0) + u
+
+    def nom(x, quoi):
+        if not isinstance(x, str) or not NOM.fullmatch(x):
+            raise Refus(f"{quoi} invalide : {x!r}")
+        return x
+
+    if t == "allocation":
+        if soldes:
+            raise Refus("allocation hors genèse")
+        for x in bloc0["repartition"]:
+            crediter("reserve:" + x["categorie"], x["unites"])
+        soldes["detruit"] = 0
+        if isinstance(tx.get("horodatage"), str):   # première époque à clore : celle de la genèse, aucune sautée
+            preuves.add(f"premiere_epoque:{max(0, epoque_de(tx['horodatage']))}")
+    elif t == "achat":
+        nom(tx.get("compte"), "compte")
+        f = tx.get("facture", "")
+        if not gele and not (isinstance(f, str) and re.fullmatch(r"ESSAI-[A-Za-z0-9-]{1,40}", f)):
+            raise Refus("achat réel fermé : bloc 0 non gelé ; en essai, la facture commence par ESSAI-")
+        if f in preuves:
+            raise Refus(f"facture déjà convertie : {f}")
+        preuves.add(f)
+        debiter("reserve:usage", n)
+        crediter("compte:" + tx["compte"], n)
+    elif t == "depense":
+        nom(tx.get("compte"), "compte")
+        if ADRESSE.fullmatch(tx["compte"]):
+            # compte de portefeuille : seule la clé qui donne cette adresse peut dépenser
+            if adresse(tx.get("cle", "")) != tx["compte"]:
+                raise Refus("la clé ne correspond pas à l'adresse du compte")
+            controler_signature(tx, tx["compte"])
+        elif tx.get("signature"):
+            raise Refus("compte géré par le producteur : signature inattendue")
+        if not isinstance(tx.get("service"), str) or not 0 < len(tx["service"]) <= 120:
+            raise Refus("service absent ou trop long")
+        debiter("compte:" + tx["compte"], n)
+        detruit = n * DESTRUCTION_PCT // 100
+        soldes["detruit"] += detruit
+        if v2:   # 80 % recyclés dans la réserve qui paie les époques ; le nœud demandé reste une simple mention
+            if tx.get("noeud"):
+                nom(tx["noeud"], "nœud")
+            crediter("reserve:usage", n - detruit)
+        else:
+            crediter("noeud:" + nom(tx["noeud"], "nœud") if tx.get("noeud") else "reserve:usage", n - detruit)
+    elif t == "recompense":
+        if v2:
+            raise Refus("règles v2 : la récompense immédiate est remplacée par la clôture d'époque")
+        nom(tx.get("noeud"), "nœud")
+        p = tx.get("preuve")
+        if not isinstance(p, str) or not re.fullmatch(r"[0-9a-f]{64}", p):
+            raise Refus("récompense sans preuve (empreinte de l'étape)")
+        if p in preuves:
+            raise Refus(f"étape déjà récompensée : {p[:12]}…")
+        preuves.add(p)
+        debiter("reserve:usage", n)
+        crediter("noeud:" + tx["noeud"], n)
+    elif t == "inscription":
+        # création d'un nœud : son nom et sa clé entrent au registre, signés par la clé du nœud elle-même
+        nom(tx.get("noeud"), "nœud")
+        if tx.get("adresse") != adresse(tx.get("cle", "")):
+            raise Refus("inscription : adresse différente de celle de la clé")
+        controler_signature(tx, tx["noeud"])
+        for cle_registre in ("inscrit:" + tx["noeud"], "cle:" + tx["adresse"]):
+            if cle_registre in preuves:
+                raise Refus(f"inscription en double ({cle_registre.split(':')[0]} déjà pris)")
+            preuves.add(cle_registre)
+    elif t == "catalogue":
+        # offres de forfaits payées en euros, publiées par le producteur ; chaque offre reste vérifiable par tous
+        offres = tx.get("offres")
+        if not isinstance(offres, dict) or not offres:
+            raise Refus("catalogue vide")
+        for oid, o in offres.items():
+            nom(oid, "offre")
+            if not (isinstance(o.get("centimes"), int) and o["centimes"] > 0 and isinstance(o.get("unites"), int)
+                    and 0 < o["unites"] <= 10_000_000):
+                raise Refus(f"offre {oid} invalide : prix en centimes d'euro et unités entières positifs")
+            preuves.add(f"offre:{oid}:{o['centimes']}:{o['unites']}")
+    elif t == "forfait":
+        # achat d'un forfait : euros uniquement, convertis en unités d'usage non cessibles (aucun transfert n'existe)
+        nom(tx.get("compte"), "compte")
+        if tx.get("client") is not None:
+            nom(tx["client"], "client")
+        if f"offre:{tx.get('offre')}:{tx.get('centimes')}:{n}" not in preuves:
+            raise Refus("forfait hors catalogue : offre, prix ou unités différents du catalogue publié")
+        f = tx.get("facture", "")
+        if not gele and not (isinstance(f, str) and re.fullmatch(r"ESSAI-[A-Za-z0-9-]{1,40}", f)):
+            raise Refus("vente réelle fermée sur la chaîne d'essai : facture ESSAI-… uniquement")
+        if f in preuves:
+            raise Refus(f"facture déjà convertie : {f}")
+        preuves.add(f)
+        debiter("reserve:usage", n)
+        crediter("compte:" + tx["compte"], n)
+    elif t == "consommation":
+        # usage mesuré par la passerelle (demandes servies), débité par lots, chaque ligne une seule fois
+        nom(tx.get("compte"), "compte")
+        nom(tx.get("client"), "client")
+        de, a_ = tx.get("de"), tx.get("a")
+        if not (isinstance(de, int) and isinstance(a_, int) and 0 < de <= a_):
+            raise Refus("consommation : plage de lignes d'usage invalide")
+        deja = max([int(x.rsplit(":", 1)[1]) for x in preuves if x.startswith(f"conso:{tx['client']}:")] + [0])
+        if de <= deja:
+            raise Refus(f"consommation déjà débitée jusqu'à la ligne {deja}")
+        debiter("compte:" + tx["compte"], n)
+        detruit = n * DESTRUCTION_PCT // 100
+        soldes["detruit"] += detruit
+        crediter("reserve:usage", n - detruit)
+        preuves.add(f"conso:{tx['client']}:{a_}")
+    elif t == "regles":
+        # mise à jour des règles à une hauteur donnée, sans réécrire le passé (comme une version à une époque)
+        if tx.get("version") != 2 or v2:
+            raise Refus("changement de règles : seule la v2 existe, et une seule fois")
+        if not isinstance(tx.get("motif"), str) or not tx["motif"]:
+            raise Refus("changement de règles sans motif")
+        preuves.add("regles:2")
+    elif t == "epoque":
+        if not v2:
+            raise Refus("clôture d'époque : règles v2 requises")
+        k = tx.get("numero")
+        deja = sorted(int(p.split(":")[1]) for p in preuves if p.startswith("epoque:"))
+        premiere = next((int(p.split(":")[1]) for p in preuves if p.startswith("premiere_epoque:")), 0)
+        attendu = deja[-1] + 1 if deja else premiere
+        if not isinstance(k, int) or k < 0 or k != attendu:
+            raise Refus(f"époque {k!r} hors séquence (attendue {attendu})")
+        debut, fin = fenetre(k)
+        if (tx.get("debut"), tx.get("fin")) != (debut, fin):
+            raise Refus("fenêtre d'époque fausse")
+        if not isinstance(tx.get("horodatage"), str) or tx["horodatage"] < fin:
+            raise Refus(f"époque {k} pas encore terminée (fin {fin})")
+        if tx.get("budget") != budget_epoque(k):
+            raise Refus("budget d'époque faux")
+        vus = set()
+        for c in tx.get("contributions", []):
+            nom(c.get("noeud"), "nœud")
+            p = c.get("preuve", "")
+            cle_p = p if c.get("role") == "travail" else "recu:" + p
+            if not re.fullmatch(r"[0-9a-f]{64}", p) or cle_p in preuves or cle_p in vus:
+                raise Refus(f"contribution invalide ou déjà payée : {p[:12]}…")
+            if not debut <= str(c.get("horodatage", "")) < fin:
+                raise Refus(f"contribution hors de l'époque {k} : {p[:12]}…")
+            vus.add(cle_p)
+        r = repartir(tx.get("contributions", []), tx["budget"], soldes.get("reserve:usage", 0))
+        if {k2: tx.get(k2) for k2 in r} != r:
+            raise Refus("répartition d'époque différente du recalcul")
+        debiter("reserve:usage", r["emis"]) if r["emis"] else None
+        for noeud_, u in r["attributions"].items():
+            crediter("noeud:" + noeud_, u)
+        preuves.update(vus)
+        preuves.add(f"epoque:{k}")
+    elif t == "cle_producteur":
+        # sans effet sur les soldes : `rejouer` contrôle la preuve et suit la clé à partir du bloc suivant
+        if not isinstance(tx.get("motif"), str) or not tx["motif"]:
+            raise Refus("changement de clé sans motif")
+    else:
+        raise Refus(f"type de transaction inconnu : {t!r} (aucune frappe, aucun transfert)")
+    if sum(soldes.values()) != bloc0["offre_totale"]:
+        raise Refus("conservation violée : soldes + détruit ≠ offre totale")
+
+
+def message_cle(ancienne, nouvelle, horodatage):
+    return canon({"chaine": CHAINE, "ancienne": ancienne, "nouvelle": nouvelle, "horodatage": horodatage})
+
+
+def controler_cle(tx, ancienne, i):
+    """La nouvelle clé signe son propre passage : on ne déclare pas une clé qu'on ne tient pas."""
+    ancienne, nouvelle = " ".join(ancienne.split()[:2]), str(tx.get("nouvelle", ""))
+    if not PUB.fullmatch(nouvelle) or nouvelle == ancienne:
+        raise Refus(f"bloc {i} : nouvelle clé de producteur invalide")
+    if not verifier_sig(message_cle(ancienne, nouvelle, tx.get("horodatage")), tx.get("preuve", ""), nouvelle, PRODUCTEUR,
+                        ESPACE_CLE):
+        raise Refus(f"bloc {i} : preuve de possession de la nouvelle clé invalide")
+    return nouvelle
+
+
+def rejouer(blocs, bloc0, pub, verifier_signatures=True):
+    """Vérifie toute la chaîne depuis la clé du bloc 1. Renvoie (soldes, preuves). Lève Refus au premier écart."""
+    soldes, preuves, prec = {}, set(), bloc0["empreinte"]
+    for i, b in enumerate(blocs, start=1):
+        if b.get("chaine") != CHAINE or b.get("version_format") != FORMAT:
+            raise Refus(f"bloc {i} : chaîne ou format inconnu")
+        if b.get("hauteur") != i:
+            raise Refus(f"bloc {i} : hauteur {b.get('hauteur')} au lieu de {i}")
+        if b.get("precedent") != prec:
+            raise Refus(f"bloc {i} : lien rompu avec le bloc {i - 1}")
+        if b.get("bloc0") != bloc0["empreinte"]:
+            raise Refus(f"bloc {i} : posé sur un autre bloc 0")
+        txs = b.get("transactions") or []
+        for tx in txs:
+            if tx.get("id") != id_tx(tx):
+                raise Refus(f"bloc {i} : transaction altérée")
+        if b.get("racine") != merkle([tx["id"] for tx in txs]):
+            raise Refus(f"bloc {i} : racine de Merkle fausse")
+        if i == 1 and [tx.get("type") for tx in txs] != ["allocation"]:
+            raise Refus("bloc 1 : la genèse d'essai ne contient que l'allocation")
+        for tx in txs:
+            try:
+                appliquer(soldes, tx, bloc0, preuves)
+            except Refus as e:
+                raise Refus(f"bloc {i} : {e}")
+        if b.get("soldes") != sha(canon(soldes)):
+            raise Refus(f"bloc {i} : empreinte des soldes fausse")
+        if b.get("empreinte") != sha(canon(corps(b))):
+            raise Refus(f"bloc {i} : empreinte du bloc fausse")
+        if verifier_signatures and not verifier_sig(b["empreinte"], b.get("signature", ""), pub, PRODUCTEUR, ESPACE_BLOC):
+            raise Refus(f"bloc {i} : signature du producteur invalide")
+        if verifier_signatures:     # l'ancienne clé signe le bloc qui la remplace, la nouvelle vaut au bloc suivant
+            for tx in txs:
+                if tx.get("type") == "cle_producteur":
+                    pub = controler_cle(tx, pub, i)
+        prec = b["empreinte"]
+    return soldes, preuves
+
+
+# ── producteur (m0) ─────────────────────────────────────────────────────────────────────────────────
+F_BLOCS, F_ATTENTE, F_COSIGN = "blocs.jsonl", "attente.jsonl", "cosignatures.jsonl"
+F_GENESE = "producteur-genese.pub"
+
+
+def pub_genese():
+    """Clé du bloc 1, point de départ de tout rejeu. Les changements de clé se lisent ensuite dans la chaîne."""
+    f = DOSSIER / F_GENESE
+    return " ".join(f.read_text().split()[:2]) if f.exists() else pub_de(CLE)
+
+
+def pub_courante(blocs):
+    pub = pub_genese()
+    for b in blocs:
+        for tx in b.get("transactions") or []:
+            if tx.get("type") == "cle_producteur":
+                pub = tx["nouvelle"]
+    return pub
+
+
+def etat_courant():
+    bloc0 = charger_bloc0()
+    blocs = lire_jsonl(DOSSIER / F_BLOCS)
+    soldes, preuves = rejouer(blocs, bloc0, pub_genese())
+    return bloc0, blocs, soldes, preuves
+
+
+def produire(txs, bloc0, blocs, soldes, preuves):
+    if pub_de(CLE) != pub_courante(blocs):
+        raise Refus("clé de signature périmée : ce n'est pas la clé en cours de la chaîne")
+    for tx in txs:
+        tx["id"] = id_tx(tx)
+    s, p = dict(soldes), set(preuves)
+    for tx in txs:
+        appliquer(s, tx, bloc0, p)
+    b = {"chaine": CHAINE, "version_format": FORMAT, "hauteur": len(blocs) + 1,
+         "precedent": blocs[-1]["empreinte"] if blocs else bloc0["empreinte"], "bloc0": bloc0["empreinte"],
+         "horodatage": maintenant(), "producteur": PRODUCTEUR, "transactions": txs,
+         "racine": merkle([tx["id"] for tx in txs]), "soldes": sha(canon(s)),
+         "detruit": s.get("detruit", 0), "essai": True}
+    b["empreinte"] = sha(canon(corps(b)))
+    b["signature"] = signer(b["empreinte"], CLE, ESPACE_BLOC)
+    ajouter_jsonl(DOSSIER / F_BLOCS, b)
+    return b
+
+
+def cmd_init(a):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    if blocs:
+        raise Refus("la genèse d'essai existe déjà")
+    b = produire([{"type": "allocation", "horodatage": maintenant(), "source": "bloc0"}], bloc0, blocs, soldes, preuves)
+    print(f"genèse d'essai : bloc 1 {b['empreinte'][:16]}… posé sur le bloc 0 {bloc0['empreinte'][:16]}…")
+
+
+def mettre_en_attente(tx):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    if not blocs:
+        raise Refus("pas de genèse d'essai : lancer `jeton-chaine init`")
+    attente = lire_jsonl(DOSSIER / F_ATTENTE)
+    s, p = dict(soldes), set(preuves)
+    for x in attente:
+        appliquer(s, x, bloc0, p)
+    if "signature" not in tx:    # une transaction signée garde l'horodatage choisi par son signataire
+        tx["horodatage"] = maintenant()
+    tx["id"] = id_tx(tx)
+    if any(x.get("id") == tx["id"] for x in attente):
+        raise Refus("transaction déjà en attente")
+    appliquer(s, tx, bloc0, p)   # refuse tout de suite ce qui ne passerait pas au scellement
+    ajouter_jsonl(DOSSIER / F_ATTENTE, tx)
+    return tx
+
+
+def cmd_acheter(a):
+    tx = {"type": "achat", "compte": a.compte, "unites": a.unites, "facture": a.facture}
+    if a.euros is not None:
+        tx["euros"] = round(a.euros, 2)
+    tx = mettre_en_attente(tx)
+    print(f"achat en attente : {a.unites} TURBO-essai pour compte:{a.compte} (facture {a.facture}) · {tx['id'][:12]}…")
+
+
+def cmd_depenser(a):
+    tx = {"type": "depense", "compte": a.compte, "unites": a.unites, "service": a.service}
+    if a.noeud:
+        tx["noeud"] = a.noeud
+    tx = mettre_en_attente(tx)
+    d = a.unites * DESTRUCTION_PCT // 100
+    print(f"dépense en attente : {a.unites} de compte:{a.compte} · {d} détruites · {a.unites - d} vers "
+          f"{'noeud:' + a.noeud if a.noeud else 'reserve:usage'} · {tx['id'][:12]}…")
+
+
+_OUTIL_VISION, _SIGNATURES = {}, {}
+
+
+def verificateur_vision(vision=VISION):
+    """Vérificateur d'événements de VISION, pris dans son dossier : une seule implémentation. None s'il manque."""
+    vision = Path(vision)
+    outil, signataires = vision / "trust/vision_evenement.py", vision / "trust/signataires"
+    if not outil.exists() or not signataires.exists():
+        return None
+    if vision not in _OUTIL_VISION:
+        chargeur = importlib.machinery.SourceFileLoader("vision_evenement_lu", str(outil))
+        spec = importlib.util.spec_from_loader("vision_evenement_lu", chargeur)
+        module = importlib.util.module_from_spec(spec)
+        chargeur.exec_module(module)
+        _OUTIL_VISION[vision] = module
+    return lambda env: _OUTIL_VISION[vision].verifier(env, str(signataires))
+
+
+def signe(env, verifier):
+    """Vrai si l'enveloppe porte une signature valide d'une clé connue. Mémorisé : le portefeuille interroge toutes les 5 s."""
+    cle = (str(env.get("empreinte")), str(env.get("signature")))
+    if cle not in _SIGNATURES:
+        try:
+            verifier(env)
+            _SIGNATURES[cle] = True
+        except subprocess.SubprocessError:      # panne passagère, pas un refus : on ne la retient pas
+            return False
+        except Exception:  # noqa: BLE001 — tout le reste est un refus de signature
+            _SIGNATURES[cle] = False
+    return _SIGNATURES[cle]
+
+
+def recus_signes(vision=VISION):
+    """Reçus de travail VISION (v1 et v2) à la signature valide : vérificateur, résultat, force de la preuve. Lecture seule."""
+    verifier = verificateur_vision(vision)
+    if verifier is None:
+        return []
+    sortie = []
+    for env in lire_jsonl(vision / "travail/recus-m0.jsonl"):
+        if not signe(env, verifier):
+            continue
+        e = env.get("evenement") or {}
+        d = e.get("donnees") or {}
+        r = {"conforme": "PASS", "non-conforme": "FAIL"}.get(d.get("resultat"), d.get("resultat"))
+        g = d.get("garantie") or ("rejeu-exact" if str(d.get("methode", "")).startswith("rejeu") else "proprietes")
+        sortie.append({"mission": d.get("mission"), "etape": d.get("etape"), "resultat": r, "garantie": g,
+                       "verificateur": e.get("machine"), "horodatage": e.get("horodatage"),
+                       "preuve": env.get("empreinte")})
+    return sortie
+
+
+def etapes_signees(vision=VISION):
+    """Étapes de mission VISION à la signature valide : (mission, enveloppe). Lecture seule."""
+    verifier = verificateur_vision(vision)
+    if verifier is None:
+        return []
+    sortie = []
+    for j in sorted((vision / "federation/missions").glob("*/journal.jsonl")):
+        for env in lire_jsonl(j):
+            if (env.get("evenement") or {}).get("type") == "mission.etape" and signe(env, verifier):
+                sortie.append((j.parent.name, env))
+    return sortie
+
+
+def auteurs(e):
+    """Machines qui ne peuvent pas juger une étape : celle qui l'a exécutée et celle qui a signé le journal de la mission."""
+    return {e.get("machine"), (e.get("donnees") or {}).get("machine")}
+
+
+def etapes_validees(vision=VISION):
+    """Étapes signées avec au moins un reçu PASS d'une autre machine et aucun FAIL. Lecture seule des journaux."""
+    recus = {}
+    for x in recus_signes(vision):
+        recus.setdefault((x["mission"], x["etape"]), []).append(x)
+    sortie = []
+    for mission, env in etapes_signees(vision):
+        e = env["evenement"]
+        d = e.get("donnees") or {}
+        lus = recus.get((mission, e.get("sujet")), [])
+        libres = [x for x in lus if x["verificateur"] and x["verificateur"] not in auteurs(e)]
+        if d.get("machine") and env.get("empreinte") and any(x["resultat"] == "PASS" for x in libres) \
+                and not any(x["resultat"] == "FAIL" for x in lus):
+            forte = any(x["resultat"] == "PASS" and x["garantie"] == "rejeu-exact" for x in libres)
+            sortie.append({"mission": mission, "etape": e.get("sujet"), "noeud": d["machine"],
+                           "voie": d.get("voie"), "duree_ms": int(d.get("duree_ms") or 0),
+                           "preuve": env["empreinte"], "horodatage": e.get("horodatage"),
+                           "garantie": "rejeu-exact" if forte else "proprietes"})
+    return sortie
+
+
+def contributions_epoque(k, preuves, vision=VISION):
+    """Contributions de l'époque k pas encore payées : travail validé et validations signées."""
+    debut, fin = fenetre(k)
+    dedans = lambda h: isinstance(h, str) and debut <= h < fin  # noqa: E731
+    cs = [{"role": "travail", "noeud": e["noeud"], "preuve": e["preuve"], "horodatage": e["horodatage"],
+           "duree_ms": e["duree_ms"], "garantie": e["garantie"], "mission": e["mission"], "etape": e["etape"]}
+          for e in etapes_validees(vision) if dedans(e["horodatage"]) and e["preuve"] not in preuves]
+    exclus = {}
+    for mission, env in etapes_signees(vision):
+        exclus.setdefault((mission, env["evenement"].get("sujet")), set()).update(auteurs(env["evenement"]))
+    cs += [{"role": "validation", "noeud": r["verificateur"], "preuve": r["preuve"], "horodatage": r["horodatage"],
+            "resultat": r["resultat"], "mission": r["mission"], "etape": r["etape"]}
+           for r in recus_signes(vision) if r["resultat"] in ("PASS", "FAIL") and r["preuve"] and r["verificateur"]
+           and r["verificateur"] not in exclus.get((r["mission"], r["etape"]), {r["verificateur"]})
+           and dedans(r["horodatage"]) and "recu:" + r["preuve"] not in preuves]
+    return sorted(cs, key=lambda c: (c["horodatage"], c["preuve"]))
+
+
+def projeter_epoque(k, soldes, preuves):
+    debut, fin = fenetre(k)
+    cs = contributions_epoque(k, preuves)
+    tx = {"type": "epoque", "numero": k, "debut": debut, "fin": fin, "budget": budget_epoque(k), "contributions": cs}
+    tx.update(repartir(cs, tx["budget"], soldes.get("reserve:usage", 0)))
+    return tx
+
+
+COCKPITS = Path(os.environ.get("JETON_COCKPITS", ACCUEIL / ".local/share/vision/cockpits.db"))
+FACTURABLE = ("ok", "vide", "en_cours")   # R2-005 : seule la route demander servie est facturable
+
+
+def catalogue_courant(blocs):
+    offres = {}
+    for b in blocs:
+        for tx in b["transactions"]:
+            if tx.get("type") == "catalogue":
+                offres.update(tx["offres"])
+    return offres
+
+
+def cmd_catalogue_publier(a):
+    d = json.loads(Path(a.fichier).read_text())
+    offres = {k: {c: v[c] for c in ("libelle", "centimes", "unites", "contenu") if c in v} for k, v in d["offres"].items()}
+    tx = mettre_en_attente({"type": "catalogue", "offres": offres, "source": Path(a.fichier).name,
+                            "statut": d.get("statut", "")})
+    print(f"catalogue en attente : {len(offres)} offre(s) · {tx['id'][:12]}…")
+
+
+def cmd_forfait(a):
+    _, blocs, _, _ = etat_courant()
+    o = catalogue_courant(blocs).get(a.offre)
+    if not o:
+        raise Refus(f"offre inconnue du catalogue publié : {a.offre}")
+    tx = {"type": "forfait", "compte": a.compte, "offre": a.offre, "centimes": o["centimes"], "unites": o["unites"],
+          "facture": a.facture}
+    if a.client:
+        tx["client"] = a.client
+    tx = mettre_en_attente(tx)
+    print(f"forfait {a.offre} ({o['centimes'] / 100:.2f} €) → {o['unites']} unités pour compte:{a.compte} · {tx['id'][:12]}…")
+
+
+def lignes_facturables(client, apres, base=None):
+    import sqlite3
+    con = sqlite3.connect(f"file:{base or COCKPITS}?mode=ro", uri=True, timeout=10)
+    try:
+        return con.execute("select id, unites from usage where noeud_id=? and route='demander' and statut in (?,?,?) "
+                           "and id>? order by id", (client, *FACTURABLE, apres)).fetchall()
+    finally:
+        con.close()
+
+
+def cmd_consommer(a):
+    _, blocs, soldes, preuves = etat_courant()
+    comptes = {}
+    for b in blocs:
+        for tx in b["transactions"]:
+            if tx.get("type") == "forfait" and tx.get("client"):
+                comptes[tx["client"]] = tx["compte"]
+    if not comptes:
+        print("aucun client n'a de forfait : rien à décompter")
+        return
+    for client, compte in sorted(comptes.items()):
+        deja = max([int(x.rsplit(":", 1)[1]) for x in preuves if x.startswith(f"conso:{client}:")] + [0])
+        lignes = lignes_facturables(client, deja)
+        u = sum(x[1] for x in lignes)
+        if not lignes or u <= 0:
+            print(f"{client} : rien de neuf depuis la ligne {deja}")
+            continue
+        solde = soldes.get("compte:" + compte, 0)
+        print(f"{client} → compte:{compte} : {len(lignes)} demande(s) servie(s), {u} unité(s), solde {solde}")
+        if a.projeter:
+            continue
+        if solde < u:
+            print(f"  forfait épuisé ({solde} < {u}) : rien débité, la passerelle doit couper au quota")
+            continue
+        t = mettre_en_attente({"type": "consommation", "compte": compte, "client": client, "unites": u,
+                               "de": lignes[0][0], "a": lignes[-1][0]})
+        print(f"  consommation en attente · {t['id'][:12]}…")
+
+
+def cmd_regles_v2(a):
+    tx = mettre_en_attente({"type": "regles", "version": 2, "motif": a.motif})
+    print(f"changement de règles v2 en attente · {tx['id'][:12]}… (actif dès le bloc qui le scelle)")
+
+
+def cmd_epoque(a):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    deja = sorted(int(p.split(":")[1]) for p in preuves if p.startswith("epoque:"))
+    k = a.numero if a.numero is not None else (deja[-1] + 1 if deja else epoque_de(maintenant()))
+    tx = projeter_epoque(k, soldes, preuves)
+    termine = maintenant() >= tx["fin"]
+    print(f"époque {k} : {tx['debut']} → {tx['fin']} ({'terminée' if termine else 'en cours'}) · budget {tx['budget']:_} · "
+          f"{len(tx['contributions'])} contribution(s) · points justifiés {tx['justifie']} · émis {tx['emis']}".replace("_", " "))
+    for n, s in tx["scores"].items():
+        print(f"  {n:<14} {s:>6} points → {tx['attributions'].get(n, 0):>8} TURBO-essai")
+    if a.clore:
+        if "regles:2" not in preuves:
+            raise Refus("règles v2 non actives : lancer `jeton-chaine regles-v2` puis sceller")
+        if not termine:
+            print(f"rien à clore : époque {k} pas encore terminée (fin {tx['fin']})")
+            return
+        while maintenant() >= tx["fin"]:   # toutes les époques terminées, dans l'ordre, aucune sautée
+            t = mettre_en_attente(tx)
+            print(f"clôture d'époque {tx['numero']} en attente : émis {tx['emis']} · {t['id'][:12]}…")
+            s, p = etat_avec_attente()
+            tx = projeter_epoque(tx["numero"] + 1, s, p)
+
+
+def etat_avec_attente():
+    bloc0, _, soldes, preuves = etat_courant()
+    s, p = dict(soldes), set(preuves)
+    for x in lire_jsonl(DOSSIER / F_ATTENTE):
+        appliquer(s, x, bloc0, p)
+    return s, p
+
+
+def cmd_recompenser(a):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    deja = preuves | {x.get("preuve") for x in lire_jsonl(DOSSIER / F_ATTENTE)}
+    n = 0
+    for e in etapes_validees():
+        if e["preuve"] in deja:
+            continue
+        u = max(1, math.ceil(e["duree_ms"] / 1000)) * TAUX_SECONDE
+        mettre_en_attente({"type": "recompense", "noeud": e["noeud"], "unites": u, "preuve": e["preuve"],
+                           "mission": e["mission"], "etape": e["etape"], "voie": e["voie"]})
+        n += 1
+        print(f"récompense en attente : {u} TURBO-essai → noeud:{e['noeud']} ({e['mission']} / {e['etape']}, voie {e['voie']})")
+    print(f"{n} étape(s) validée(s) à récompenser")
+
+
+def cmd_sceller(a):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    attente = lire_jsonl(DOSSIER / F_ATTENTE)
+    if not attente:
+        print("rien en attente")
+        return
+    b = produire(attente, bloc0, blocs, soldes, preuves)
+    ecrire_jsonl(DOSSIER / F_ATTENTE, [])
+    print(f"bloc {b['hauteur']} scellé : {len(attente)} transaction(s), racine {b['racine'][:12]}…, "
+          f"empreinte {b['empreinte'][:16]}…")
+
+
+def cmd_changer_cle(a):
+    """Déclare la clé des blocs suivants, dans un bloc signé par la clé en cours. Nœud producteur arrêté."""
+    bloc0, blocs, soldes, preuves = etat_courant()
+    if not blocs:
+        raise Refus("pas de genèse d'essai : lancer `jeton-chaine init`")
+    fichier = DOSSIER / F_GENESE
+    if not fichier.exists():        # le rejeu ci-dessus vient de prouver que c'est bien la clé du bloc 1
+        fichier.write_text(pub_genese() + "\n")
+    nouvelle, ancienne, h = pub_de(a.nouvelle), pub_courante(blocs), maintenant()
+    tx = {"type": "cle_producteur", "motif": a.motif, "horodatage": h, "nouvelle": nouvelle,
+          "preuve": signer(message_cle(ancienne, nouvelle, h), a.nouvelle, ESPACE_CLE)}
+    controler_cle(tx, ancienne, len(blocs) + 1)
+    b = produire([tx], bloc0, blocs, soldes, preuves)
+    print(f"bloc {b['hauteur']} : clé des blocs suivants {nouvelle[:36]}…")
+
+
+def cmd_verifier(a):
+    bloc0, blocs, soldes, preuves = etat_courant()
+    cos = [c for c in lire_jsonl(DOSSIER / F_COSIGN) if blocs and c.get("empreinte") == blocs[-1]["empreinte"]]
+    print(f"CHAÎNE INTACTE : {len(blocs)} bloc(s) sur le bloc 0 {bloc0['empreinte'][:12]}…, "
+          f"{sum(len(b['transactions']) for b in blocs)} transaction(s), offre conservée "
+          f"{sum(soldes.values()):_} = {bloc0['offre_totale']:_}, détruit {soldes.get('detruit', 0)} ; "
+          f"tête cosignée par {', '.join(sorted(c['machine'] for c in cos)) or 'aucun témoin'}".replace("_", " "))
+
+
+def cmd_soldes(a):
+    _, blocs, soldes, _ = etat_courant()
+    for k in sorted(soldes, key=lambda k: (not k.startswith("reserve"), k)):
+        etat = "" if not k.startswith("reserve:") else (" (circule)" if k in ACTIVES else " (bloquée)")
+        print(f"{soldes[k]:>12,}  {k}{etat}".replace(",", " "))
+
+
+def exporter():
+    bloc0, blocs, soldes, preuves = etat_courant()
+    cos = lire_jsonl(DOSSIER / F_COSIGN)
+    return {"genere_le": maintenant(), "chaine": CHAINE, "unite": "TURBO-essai", "essai": True,
+            "bloc0": {k: bloc0[k] for k in ("empreinte", "offre_totale", "unite", "gele", "frappe_le", "regles")},
+            "repartition": [{k: x[k] for k in ("categorie", "part", "unites", "liberation")} for x in bloc0["repartition"]],
+            "regles": {"destruction_pct": DESTRUCTION_PCT, "taux_seconde": TAUX_SECONDE, "actives": sorted(ACTIVES)},
+            "soldes": soldes, "attente": len(lire_jsonl(DOSSIER / F_ATTENTE)),
+            "catalogue": catalogue_courant(blocs),
+            "forfaits": [{"hauteur": b["hauteur"], "offre": tx["offre"], "centimes": tx["centimes"], "unites": tx["unites"],
+                          "client": tx.get("client")} for b in blocs for tx in b["transactions"] if tx.get("type") == "forfait"],
+            "noeuds": [{"noeud": tx["noeud"], "adresse": tx["adresse"], "hauteur": b["hauteur"],
+                        "horodatage": tx.get("horodatage")}
+                       for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"],
+            "blocs": [{k: b[k] for k in ("hauteur", "empreinte", "precedent", "horodatage", "producteur", "racine",
+                                          "detruit")} | {"transactions": [{k: v for k, v in tx.items()
+                                                                            if k not in ("euros", "signature", "cle")}
+                                                                           for tx in b["transactions"]],
+                                                         "cosignatures": sorted(c["machine"] for c in cos
+                                                                                if c.get("empreinte") == b["empreinte"])}
+                      for b in blocs]}
+
+
+def cmd_exporter(a):
+    d = canon(exporter())
+    if a.sortie:
+        p = Path(a.sortie)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(d)
+        os.replace(tmp, p)
+        print(f"exporté : {p}")
+    else:
+        print(d)
+
+
+def cmd_collecter(a):
+    bloc0, blocs, soldes, _ = etat_courant()
+    if not blocs:
+        raise Refus("chaîne vide")
+    paquet = canon({"bloc0": bloc0, "blocs": blocs})
+    tete = blocs[-1]["empreinte"]
+    vus = {c["machine"] for c in lire_jsonl(DOSSIER / F_COSIGN) if c.get("empreinte") == tete}
+    for m, lance in TEMOINS.items():
+        if m in vus:
+            print(f"{m} : déjà cosigné")
+            continue
+        r = subprocess.run([*lance, f"python3 -B {DOSSIER_TEMOIN}/jeton-chaine cosigner --dossier {DOSSIER_TEMOIN}"],
+                           input=paquet, capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            print(f"{m} : REFUS ou injoignable — {(r.stdout + r.stderr).strip()[-200:]}")
+            continue
+        c = json.loads(r.stdout.strip().splitlines()[-1])
+        pub = (DOSSIER / f"temoin-{m}.pub").read_text().strip() if (DOSSIER / f"temoin-{m}.pub").exists() else None
+        if not pub:
+            print(f"{m} : clé du témoin non épinglée sur m0 ({DOSSIER}/temoin-{m}.pub)")
+            continue
+        if c.get("machine") != m or c.get("empreinte") != tete or not verifier_sig(
+                f"{c['hauteur']}:{c['empreinte']}", c["signature"], pub, m, ESPACE_COSIGN):
+            print(f"{m} : cosignature invalide, ignorée")
+            continue
+        ajouter_jsonl(DOSSIER / F_COSIGN, c)
+        print(f"{m} : tête {c['hauteur']} cosignée ({c['soldes_controle']})")
+
+
+# ── témoin ──────────────────────────────────────────────────────────────────────────────────────────
+def cmd_temoin_init(a):
+    d = Path(os.path.expanduser(a.dossier))
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    cle = d / f"{a.machine}_jeton_ed25519"
+    if not cle.exists():
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", f"jeton-temoin-{a.machine}", "-f", str(cle)],
+                       check=True, stdin=subprocess.DEVNULL)
+    (d / "producteur.pub").write_text(a.producteur_pub.strip() + "\n")
+    (d / "machine").write_text(a.machine + "\n")
+    print(pub_de(cle))
+
+
+def cmd_cosigner(a):
+    d = Path(os.path.expanduser(a.dossier))
+    machine = (d / "machine").read_text().strip()
+    pub = (d / "producteur.pub").read_text().strip()
+    p = json.loads(sys.stdin.read())
+    bloc0, blocs = p["bloc0"], p["blocs"]
+    recalc = sha(json.dumps({k: v for k, v in bloc0.items() if k not in ("empreinte", "signature")},
+                            ensure_ascii=False, sort_keys=True))
+    if recalc != bloc0.get("empreinte"):
+        raise Refus("bloc 0 reçu altéré")
+    ancre = d / "bloc0.empreinte"
+    if ancre.exists() and ancre.read_text().strip() != bloc0["empreinte"]:
+        raise Refus("bloc 0 différent de celui épinglé par ce témoin")
+    soldes, _ = rejouer(blocs, bloc0, pub)
+    histo = d / "tetes.jsonl"
+    for t in lire_jsonl(histo):   # pas de retour en arrière ni de vue divergente
+        if t["hauteur"] <= len(blocs) and blocs[t["hauteur"] - 1]["empreinte"] != t["empreinte"]:
+            raise Refus(f"vue divergente à la hauteur {t['hauteur']}")
+        if t["hauteur"] > len(blocs):
+            raise Refus(f"retour en arrière : ce témoin a déjà vu la hauteur {t['hauteur']}")
+    ancre.write_text(bloc0["empreinte"] + "\n")
+    tete = blocs[-1]
+    ajouter_jsonl(histo, {"hauteur": tete["hauteur"], "empreinte": tete["empreinte"], "vu_le": maintenant()})
+    sig = signer(f"{tete['hauteur']}:{tete['empreinte']}", d / f"{machine}_jeton_ed25519", ESPACE_COSIGN)
+    print(canon({"machine": machine, "hauteur": tete["hauteur"], "empreinte": tete["empreinte"], "signature": sig,
+                 "horodatage": maintenant(),
+                 "soldes_controle": f"offre conservée {sum(soldes.values())}, détruit {soldes.get('detruit', 0)}"}))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    s = ap.add_subparsers(dest="cmd", required=True)
+    s.add_parser("init")
+    x = s.add_parser("acheter")
+    x.add_argument("--compte", required=True)
+    x.add_argument("--unites", type=int, required=True)
+    x.add_argument("--facture", required=True)
+    x.add_argument("--euros", type=float)
+    x = s.add_parser("depenser")
+    x.add_argument("--compte", required=True)
+    x.add_argument("--unites", type=int, required=True)
+    x.add_argument("--service", required=True)
+    x.add_argument("--noeud")
+    x = s.add_parser("catalogue-publier")
+    x.add_argument("--fichier", required=True)
+    x = s.add_parser("forfait")
+    x.add_argument("--compte", required=True)
+    x.add_argument("--offre", required=True)
+    x.add_argument("--facture", required=True)
+    x.add_argument("--client")
+    x = s.add_parser("consommer")
+    x.add_argument("--projeter", action="store_true")
+    x = s.add_parser("changer-cle")
+    x.add_argument("--nouvelle", required=True)
+    x.add_argument("--motif", required=True)
+    x = s.add_parser("regles-v2")
+    x.add_argument("--motif", required=True)
+    x = s.add_parser("epoque")
+    x.add_argument("--numero", type=int)
+    x.add_argument("--clore", action="store_true")
+    for c in ("recompenser", "sceller", "verifier", "etat", "soldes", "collecter"):
+        s.add_parser(c)
+    x = s.add_parser("exporter")
+    x.add_argument("--sortie")
+    x = s.add_parser("temoin-init")
+    x.add_argument("--dossier", required=True)
+    x.add_argument("--machine", required=True)
+    x.add_argument("--producteur-pub", required=True)
+    x = s.add_parser("cosigner")
+    x.add_argument("--dossier", required=True)
+    a = ap.parse_args()
+    a.cmd = {"etat": "verifier"}.get(a.cmd, a.cmd)
+    try:
+        globals()["cmd_" + a.cmd.replace("-", "_")](a)
+    except Refus as e:
+        print(f"REFUS : {e}")
+        return 1
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
+        print(f"ERREUR : {e.__class__.__name__} : {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,736 @@
+#!/usr/bin/env python3
+"""turbo-noeud — nœud du réseau d'essai VISION (chaîne TURBO-essai), avec le portefeuille de bureau intégré.
+
+Un seul programme, deux écoutes :
+  * pair-à-pair (adresse « p2p » de la configuration) : sert les blocs, le bloc 0, la liste des pairs, et accepte
+    les seules transactions qui s'authentifient d'elles-mêmes (dépense signée par un portefeuille, inscription signée
+    par un nœud). Aucune exécution, aucune commande, aucun fichier : un pair ne peut rien faire faire à la machine.
+  * locale (adresse « api », toujours 127.0.0.1) : le portefeuille de bureau (dossier ui/) et son API.
+
+Rôles :
+  producteur : tient la chaîne, met en attente, scelle un bloc signé dès qu'une transaction attend (m0) ;
+  pair       : télécharge les blocs de ses pairs, REJOUE toute la chaîne depuis le bloc 0 avec la clé du producteur
+               épinglée à l'installation, et n'ajoute que ce qui passe ; ses transactions partent vers ses pairs.
+
+Les blocs se vérifient d'eux-mêmes (empreintes, Merkle, signatures) : le transport n'a pas besoin d'un réseau
+privé. Une connexion directe en HTTP entre nœuds suffit, Tailscale reste un repli.
+Miroirs : un nœud peut aussi lire la chaîne sur un site statique (GitHub Pages, configuration « miroirs ») ; il
+rejoue tout comme pour un pair, un miroir ne peut donc rien imposer. Une demande d'inscription, signée par le nœud,
+se dépose alors en ticket sur le dépôt public (configuration « depot ») et le producteur l'importe.
+
+  turbo-noeud --config ~/.local/share/turbo-noeud/config.json
+Unités d'essai sans valeur ; rien n'est vendu ni offert au public.
+"""
+import argparse
+import csv
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+VERSION = "0.5.1-essai"
+# adresse annoncée par un pair : http, réseau privé ou boucle locale seulement (jamais une adresse publique)
+ANNONCE = re.compile(r"http://(127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+"
+                     r"|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+):\d{2,5}")
+MAX_CORPS = 64 * 1024
+TYPES_P2P = {"depense", "inscription"}      # seuls types acceptés d'un pair : signés par leur auteur
+VERROU = threading.RLock()
+JOURNAL = []
+
+
+def noter(msg):
+    ligne = f"{datetime.now().strftime('%H:%M:%S')} {msg}"
+    print(ligne, flush=True)
+    JOURNAL.append(ligne)
+    del JOURNAL[:-200]
+
+
+def euros(centimes):
+    return f"{centimes / 100:.2f}".replace(".", ",")
+
+
+def cellule_csv(x):
+    """Une cellule de tableur ne commence jamais par une formule."""
+    x = "" if x is None else str(x)
+    return "'" + x if x[:1] in ("=", "+", "-", "@") else x
+
+
+class Noeud:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.nom = cfg["nom"]
+        self.producteur = cfg["role"] == "producteur"
+        self.chaine = Path(os.path.expanduser(cfg["chaine"]))
+        self.chaine.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if self.producteur:
+            cle = os.path.expanduser(cfg["cle_producteur"])
+            bloc0 = os.path.expanduser(cfg["bloc0"])
+        else:   # un pair n'a que la clé PUBLIQUE du producteur, épinglée à l'installation
+            cle = str(self.chaine / "producteur")
+            Path(cle + ".pub").write_text(cfg["producteur_pub"].strip() + "\n")
+            bloc0 = str(self.chaine / "bloc0.json")
+        os.environ.update({"JETON_CHAINE": str(self.chaine), "JETON_BLOC0": bloc0, "JETON_CLE": cle,
+                           "JETON_VISION": cfg.get("vision", "/nonexistent")})
+        outil = os.path.expanduser(cfg["outil_chaine"])
+        ch = importlib.machinery.SourceFileLoader("jeton_chaine", outil)
+        spec = importlib.util.spec_from_loader("jeton_chaine", ch)
+        self.J = importlib.util.module_from_spec(spec)
+        ch.exec_module(self.J)
+        self.bloc0_chemin = Path(bloc0)
+        self.cle_portefeuille = Path(os.path.expanduser(cfg["portefeuille"]))
+        self.cle_noeud = Path(os.path.expanduser(cfg["cle_noeud"]))
+        self.pairs = {p: {"vu": None, "hauteur": None, "erreur": None} for p in cfg.get("pairs", [])}
+        self.soumises = []      # transactions parties de ce nœud, en attente d'un bloc
+        self.derniere_synchro = None
+        self.candidats = set()  # pairs qui se sont annoncés, à sonder avant de les retenir
+        self._capacite = (0, None)
+        self.miroirs = {m.rstrip("/"): {"vu": None, "hauteur": None, "erreur": None}
+                        for m in cfg.get("miroirs", []) if re.fullmatch(r"https://[\w.-]+(/[\w./-]*)?", m)}
+
+    def capacite(self):
+        """Ce que cette machine met au pot commun : GPU, CPU, mémoire, charge. Lecture seule, mise en cache 15 s."""
+        if time.time() - self._capacite[0] < 15:
+            return self._capacite[1]
+        gpus = []
+        if shutil.which("nvidia-smi"):
+            try:
+                r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu,temperature.gpu",
+                                    "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6)
+                for l in r.stdout.strip().splitlines():
+                    x = [y.strip() for y in l.split(",")]
+                    if len(x) == 5:
+                        gpus.append({"nom": x[0], "vram_mo": int(float(x[1])), "vram_utilisee_mo": int(float(x[2])),
+                                     "utilisation_pct": int(float(x[3])), "temperature": int(float(x[4]))})
+            except (OSError, ValueError, subprocess.SubprocessError):
+                pass
+        mem = {}
+        try:
+            for l in open("/proc/meminfo"):
+                k, v = l.split(":", 1)
+                mem[k] = int(v.split()[0]) // 1024
+        except (OSError, ValueError):
+            pass
+        modele = ""
+        try:
+            modele = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), "")
+        except OSError:
+            pass
+        c = {"machine": os.uname().nodename, "gpus": gpus, "cpu_coeurs": os.cpu_count(), "cpu_modele": modele,
+             "ram_mo": mem.get("MemTotal"), "ram_libre_mo": mem.get("MemAvailable"),
+             "charge": round(os.getloadavg()[0], 2), "mesure": self.J.maintenant()}
+        self._capacite = (time.time(), c)
+        return c
+
+    # ── état ──────────────────────────────────────────────────────────────────────────────────────
+    def etat(self):
+        with VERROU:
+            if not self.bloc0_chemin.exists():
+                return None, [], {}, set()
+            return self.J.etat_courant()
+
+    def pub(self, cle):
+        return self.J.pub_de(cle)
+
+    def adresse(self):
+        return self.J.adresse(self.pub(self.cle_portefeuille))
+
+    # ── synchronisation (pair) ────────────────────────────────────────────────────────────────────
+    def http(self, url, donnees=None, delai=8):
+        req = urllib.request.Request(url, data=None if donnees is None else json.dumps(donnees).encode(),
+                                     headers={"Content-Type": "application/json", "User-Agent": f"turbo-noeud/{VERSION}"})
+        with urllib.request.urlopen(req, timeout=delai) as r:
+            return json.loads(r.read(4 * 1024 * 1024))
+
+    def sonder_candidats(self):
+        """Un pair annoncé n'est retenu qu'après une vérification : il répond, sur le même bloc 0."""
+        for u in list(self.candidats):
+            self.candidats.discard(u)
+            if u in self.pairs or u == self.cfg.get("p2p_public") or len(self.pairs) >= 64:
+                continue
+            try:
+                i = self.http(u + "/p2p/info", delai=4)
+                if i.get("bloc0") == self.cfg["bloc0_empreinte"]:
+                    self.pairs[u] = {"vu": None, "hauteur": None, "erreur": None, "annonce": True}
+                    noter(f"pair annoncé retenu : {u} ({i.get('nom')})")
+            except (OSError, ValueError, urllib.error.URLError):
+                pass
+
+    def synchroniser(self):
+        self.sonder_candidats()
+        for p, info in list(self.pairs.items()):
+            try:
+                q = "?annonce=" + urllib.parse.quote(self.cfg["p2p_public"], safe="") if self.cfg.get("p2p_public") else ""
+                i = self.http(p + "/p2p/info" + q)
+                info["capacite"] = i.get("capacite")
+                info["cockpit"] = i.get("cockpit")
+                info.update(vu=time.time(), hauteur=i.get("hauteur"), nom=i.get("nom"), role=i.get("role"), erreur=None)
+                if i.get("bloc0") != self.cfg["bloc0_empreinte"]:
+                    info["erreur"] = "pair sur un autre bloc 0 : ignoré"
+                    continue
+                for autre in i.get("pairs", []):    # échange de pairs, sans jamais s'ajouter soi-même
+                    if autre not in self.pairs and autre != self.cfg.get("p2p_public") and len(self.pairs) < 32:
+                        self.pairs[autre] = {"vu": None, "hauteur": None, "erreur": None}
+                if self.producteur:
+                    continue
+                with VERROU:
+                    if not self.bloc0_chemin.exists():
+                        b0 = self.http(p + "/p2p/bloc0")
+                        tmp = self.bloc0_chemin.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(b0, ensure_ascii=False))
+                        self.J.charger_bloc0(tmp)
+                        if b0["empreinte"] != self.cfg["bloc0_empreinte"]:
+                            raise self.J.Refus("bloc 0 reçu différent de l'empreinte épinglée")
+                        os.replace(tmp, self.bloc0_chemin)
+                        noter(f"bloc 0 reçu de {p} et vérifié")
+                    bloc0, blocs, _, _ = self.J.etat_courant()
+                    if (i.get("hauteur") or 0) <= len(blocs):
+                        continue
+                    nouveaux = self.http(p + f"/p2p/blocs?depuis={len(blocs)}").get("blocs", [])
+                    self.J.rejouer(blocs + nouveaux, bloc0, self.cfg["producteur_pub"])
+                    for b in nouveaux:
+                        self.J.ajouter_jsonl(self.chaine / self.J.F_BLOCS, b)
+                    if nouveaux:
+                        noter(f"{len(nouveaux)} bloc(s) reçu(s) de {p}, chaîne rejouée : hauteur {len(blocs) + len(nouveaux)}")
+                        tetes = {b["empreinte"] for b in nouveaux}
+                        self.soumises = [s for s in self.soumises
+                                         if not any(tx["id"] == s["id"] for b in nouveaux for tx in b["transactions"])]
+                        del tetes
+            except self.J.Refus as e:
+                info["erreur"] = f"REFUS : {e}"
+                noter(f"{p} : {e}")
+            except (OSError, ValueError, urllib.error.URLError) as e:
+                info["erreur"] = f"injoignable : {e.__class__.__name__}"
+        if not self.producteur:
+            self.synchroniser_miroirs()
+        self.derniere_synchro = time.time()
+
+    def synchroniser_miroirs(self):
+        """Lecture de la chaîne sur un site statique : info.json, bloc0.json, blocs.json. Tout est rejoué ici."""
+        for m, info in self.miroirs.items():
+            if info.get("vu") and time.time() - info["vu"] < 60:
+                continue    # un site statique n'a pas besoin d'être relu toutes les 5 s
+            try:
+                i = self.http(m + "/info.json", delai=15)
+                info.update(vu=time.time(), hauteur=i.get("hauteur"), erreur=None, genere_le=i.get("genere_le"))
+                if i.get("bloc0") != self.cfg["bloc0_empreinte"]:
+                    info["erreur"] = "miroir sur un autre bloc 0 : ignoré"
+                    continue
+                with VERROU:
+                    if not self.bloc0_chemin.exists():
+                        b0 = self.http(m + "/bloc0.json", delai=15)
+                        tmp = self.bloc0_chemin.with_suffix(".tmp")
+                        tmp.write_text(json.dumps(b0, ensure_ascii=False))
+                        self.J.charger_bloc0(tmp)
+                        if b0["empreinte"] != self.cfg["bloc0_empreinte"]:
+                            raise self.J.Refus("bloc 0 du miroir différent de l'empreinte épinglée")
+                        os.replace(tmp, self.bloc0_chemin)
+                        noter(f"bloc 0 lu sur le miroir {m} et vérifié")
+                    bloc0, blocs, _, _ = self.J.etat_courant()
+                    if (i.get("hauteur") or 0) <= len(blocs):
+                        continue
+                    tous = self.http(m + "/blocs.json", delai=30).get("blocs", [])
+                    if [b["empreinte"] for b in tous[:len(blocs)]] != [b["empreinte"] for b in blocs]:
+                        raise self.J.Refus("le miroir ne prolonge pas la chaîne locale")
+                    nouveaux = tous[len(blocs):]
+                    self.J.rejouer(blocs + nouveaux, bloc0, self.cfg["producteur_pub"])
+                    for b in nouveaux:
+                        self.J.ajouter_jsonl(self.chaine / self.J.F_BLOCS, b)
+                    if nouveaux:
+                        noter(f"{len(nouveaux)} bloc(s) lu(s) sur le miroir {m}, chaîne rejouée : hauteur {len(blocs) + len(nouveaux)}")
+            except self.J.Refus as e:
+                info["erreur"] = f"REFUS : {e}"
+                noter(f"miroir {m} : {e}")
+            except (OSError, ValueError, KeyError, urllib.error.URLError) as e:
+                info["erreur"] = f"injoignable : {e.__class__.__name__}"
+
+    # ── production (producteur) ───────────────────────────────────────────────────────────────────
+    def sceller_si_besoin(self):
+        with VERROU:
+            attente = self.J.lire_jsonl(self.chaine / self.J.F_ATTENTE)
+            if not attente:
+                return
+            bloc0, blocs, soldes, preuves = self.J.etat_courant()
+            try:
+                b = self.J.produire(attente, bloc0, blocs, soldes, preuves)
+            except self.J.Refus as e:
+                noter(f"scellement refusé, attente conservée : {e}")
+                return
+            self.J.ecrire_jsonl(self.chaine / self.J.F_ATTENTE, [])
+            noter(f"bloc {b['hauteur']} scellé : {len(attente)} transaction(s), {b['empreinte'][:12]}…")
+
+    def boucle(self):
+        while True:
+            try:
+                if self.producteur:
+                    self.sceller_si_besoin()
+                self.synchroniser()
+            except Exception as e:  # noqa: BLE001 — la boucle d'un nœud ne meurt pas sur une erreur
+                noter(f"boucle : {e.__class__.__name__} : {e}")
+            time.sleep(self.cfg.get("cadence_s", 10))
+
+    # ── transactions ──────────────────────────────────────────────────────────────────────────────
+    def recevoir(self, tx, origine):
+        """Transaction reçue d'un pair (ou de ce nœud). Le producteur la met en attente, un pair la relaie."""
+        if tx.get("type") not in TYPES_P2P:
+            raise self.J.Refus(f"type refusé sur le réseau : {tx.get('type')!r}")
+        if tx.get("type") == "depense" and not self.J.ADRESSE.fullmatch(str(tx.get("compte", ""))):
+            raise self.J.Refus("seul un compte de portefeuille signé peut dépenser depuis le réseau")
+        if self.producteur:
+            with VERROU:
+                t = self.J.mettre_en_attente(tx)
+            noter(f"transaction {t['type']} {t['id'][:12]}… acceptée ({origine})")
+            return {"ok": True, "id": t["id"], "statut": "en attente du prochain bloc"}
+        derniere = None
+        for p in self.pairs:
+            try:
+                r = self.http(p + "/p2p/tx", tx)
+                if r.get("ok"):
+                    noter(f"transaction {tx['id'][:12]}… relayée vers {p}")
+                    return {"ok": True, "id": tx["id"], "statut": f"relayée vers {p}"}
+                derniere = r.get("erreur")
+            except urllib.error.HTTPError as e:
+                try:
+                    derniere = json.loads(e.read()).get("erreur")
+                except ValueError:
+                    derniere = str(e)
+            except (OSError, ValueError) as e:
+                derniere = f"{p} injoignable ({e.__class__.__name__})"
+        raise self.J.Refus(derniere or "aucun pair joignable")
+
+    def depenser(self, unites, service, noeud=None):
+        tx = {"type": "depense", "compte": self.adresse(), "unites": int(unites), "service": str(service)[:120],
+              "cle": self.pub(self.cle_portefeuille), "horodatage": self.J.maintenant()}
+        if noeud:
+            tx["noeud"] = noeud
+        self.J.signer_tx(tx, self.cle_portefeuille)
+        r = self.recevoir(tx, "portefeuille local")
+        self.soumises.append({"id": tx["id"], "type": "depense", "unites": tx["unites"], "service": tx["service"],
+                              "horodatage": tx["horodatage"]})
+        return r
+
+    def acheter(self, unites):
+        if not self.producteur:
+            raise self.J.Refus("achat d'essai : seulement sur le nœud producteur (achat réel fermé, bloc 0 non gelé)")
+        if not 0 < int(unites) <= 10000:
+            raise self.J.Refus("achat d'essai limité à 10 000 unités par demande")
+        tx = {"type": "achat", "compte": self.adresse(), "unites": int(unites),
+              "facture": "ESSAI-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")}
+        with VERROU:
+            t = self.J.mettre_en_attente(tx)
+        noter(f"achat d'essai {unites} pour {tx['compte'][:12]}… en attente")
+        return {"ok": True, "id": t["id"], "facture": tx["facture"]}
+
+    def acheter_forfait(self, offre):
+        """Forfait payé en euros, converti en unités d'usage. Essai : facture ESSAI-, aucune somme encaissée."""
+        if not self.producteur:
+            raise self.J.Refus("achat de forfait : sur le nœud producteur seulement tant que la vente réelle est fermée")
+        _, blocs, _, _ = self.etat()
+        o = self.J.catalogue_courant(blocs).get(str(offre))
+        if not o:
+            raise self.J.Refus(f"offre inconnue : {offre}")
+        tx = {"type": "forfait", "compte": self.adresse(), "offre": str(offre), "centimes": o["centimes"],
+              "unites": o["unites"], "facture": "ESSAI-FORFAIT-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")}
+        with VERROU:
+            t = self.J.mettre_en_attente(tx)
+        noter(f"forfait d'essai {offre} ({o['centimes'] / 100:.2f} €, {o['unites']} unités) en attente")
+        return {"ok": True, "id": t["id"], "facture": tx["facture"], "unites": o["unites"]}
+
+    def tx_inscription(self):
+        """Inscription signée par la clé du nœud ; elle rattache le portefeuille de la machine, pour la consultation."""
+        pub = self.pub(self.cle_noeud)
+        tx = {"type": "inscription", "noeud": self.nom, "cle": pub, "adresse": self.J.adresse(pub),
+              "portefeuille": self.adresse(), "horodatage": self.J.maintenant()}
+        return self.J.signer_tx(tx, self.cle_noeud)
+
+    def inscrire(self):
+        tx = self.tx_inscription()
+        r = self.recevoir(tx, "inscription du nœud")
+        self.soumises.append({"id": tx["id"], "type": "inscription", "horodatage": tx["horodatage"]})
+        return r
+
+    def demande_inscription(self):
+        """Sans pair joignable (nœud public lu sur un miroir) : la transaction signée part en ticket sur le dépôt.
+        Elle ne contient que des données publiques (nom, clé publique, adresses, signature)."""
+        tx = self.tx_inscription()
+        corps = ("Demande d'inscription d'un nœud sur la chaîne d'essai TURBO-essai.\n\n"
+                 "Transaction signée par la clé du nœud (données publiques uniquement) :\n\n```json\n"
+                 + json.dumps(tx, ensure_ascii=False, indent=1) + "\n```\n")
+        r = {"ok": True, "transaction": tx, "corps": corps}
+        depot = self.cfg.get("depot")
+        if depot and re.fullmatch(r"[\w.-]+/[\w.-]+", depot):
+            r["ticket"] = (f"https://github.com/{depot}/issues/new?" + urllib.parse.urlencode(
+                {"title": f"Inscription du nœud {self.nom}", "labels": "inscription", "body": corps}))
+        return r
+
+    # ── consultation d'un compte par son adresse (lecture seule : la chaîne est publique) ──────────────
+    def compte(self, adresse):
+        if not self.J.ADRESSE.fullmatch(str(adresse or "")):
+            raise self.J.Refus("adresse invalide : te1 suivi de 40 caractères hexadécimaux")
+        _, blocs, soldes, _ = self.etat()
+        hist, forfaits, depense, detruit = [], [], 0, 0
+        noeuds = {}
+        for b in blocs:
+            for tx in b["transactions"]:
+                t = tx.get("type")
+                if t == "inscription" and adresse in (tx.get("adresse"), tx.get("portefeuille")):
+                    noeuds[tx["noeud"]] = {"noeud": tx["noeud"], "adresse": tx["adresse"], "hauteur": b["hauteur"],
+                                           "horodatage": tx.get("horodatage"),
+                                           "lien": "clé du nœud" if tx.get("adresse") == adresse else "portefeuille rattaché"}
+                if tx.get("compte") != adresse:
+                    continue
+                sens = "+" if t in ("achat", "forfait") else "-"
+                if sens == "-":
+                    depense += tx["unites"]
+                    detruit += tx["unites"] * self.J.DESTRUCTION_PCT // 100
+                if t == "forfait":
+                    forfaits.append({"offre": tx["offre"], "unites": tx["unites"], "hauteur": b["hauteur"],
+                                     "horodatage": tx.get("horodatage") or b["horodatage"], "facture": tx.get("facture")})
+                hist.append({"hauteur": b["hauteur"], "horodatage": tx.get("horodatage") or b["horodatage"],
+                             "type": t, "unites": tx["unites"], "sens": sens,
+                             "detail": tx.get("service") or (f"forfait {tx['offre']} · {tx['facture']}" if t == "forfait" else None)
+                             or (f"usage du cockpit, lignes {tx['de']}–{tx['a']}" if t == "consommation" else None)
+                             or tx.get("facture"), "noeud": tx.get("noeud"), "id": tx["id"]})
+        if adresse == self.adresse() and self.nom not in noeuds:
+            # portefeuille et nœud de la même machine : lien connu de ce nœud seulement (inscription antérieure à la 0.5)
+            ins = next((tx for b in blocs for tx in b["transactions"]
+                        if tx.get("type") == "inscription" and tx.get("noeud") == self.nom), None)
+            if ins:
+                h = next(b["hauteur"] for b in blocs if ins in b["transactions"])
+                noeuds[self.nom] = {"noeud": self.nom, "adresse": ins["adresse"], "hauteur": h,
+                                    "horodatage": ins.get("horodatage"), "lien": "même machine (lien local)"}
+        caps = {n["nom"]: n for n in self.vue_reseau()["noeuds"]} if noeuds else {}
+        for n in noeuds.values():
+            c = caps.get(n["noeud"]) or {}
+            n["gains"] = soldes.get("noeud:" + n["noeud"], 0)
+            n["actif"] = c.get("actif", False)
+            n["materiel"] = ({"gpus": [{"nom": g["nom"], "vram_mo": g["vram_mo"]} for g in c["capacite"]["gpus"]],
+                              "cpu_coeurs": c["capacite"]["cpu_coeurs"], "ram_mo": c["capacite"]["ram_mo"]}
+                             if c.get("capacite") else None)
+        return {"adresse": adresse, "connu": bool(hist or noeuds), "solde": soldes.get("compte:" + adresse, 0),
+                "ici": adresse == self.adresse(), "forfaits": list(reversed(forfaits)),
+                "abonnement": forfaits[-1] if forfaits else None, "depense": depense, "detruit_par_ses_depenses": detruit,
+                "historique": list(reversed(hist)), "noeuds": list(noeuds.values()),
+                "gains_total": sum(n["gains"] for n in noeuds.values())}
+
+    # ── vues pour le portefeuille ─────────────────────────────────────────────────────────────────
+    def cle_blocs(self, blocs):
+        """Clé qui signe les prochains blocs, et le bloc qui l'a déclarée (None : clé d'origine)."""
+        hauteur = next((b["hauteur"] for b in reversed(blocs) for tx in b["transactions"]
+                        if tx.get("type") == "cle_producteur"), None)
+        return {"empreinte": self.J.sha(self.J.pub_courante(blocs))[:16], "declaree_au_bloc": hauteur}
+
+    def vue_etat(self):
+        bloc0, blocs, soldes, _ = self.etat()
+        hauteur_pairs = max([i["hauteur"] or 0 for i in self.pairs.values()] + [0])
+        inscrits = [tx for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
+        return {"version": VERSION, "nom": self.nom, "role": self.cfg["role"], "reseau": "turbo-jeton-essai", "nom_reseau": "VISION",
+                "regles": 2 if any(tx.get("type") == "regles" for b in blocs for tx in b["transactions"]) else 1,
+                "hauteur": len(blocs), "hauteur_pairs": hauteur_pairs,
+                "synchro": "à jour" if self.producteur or len(blocs) >= hauteur_pairs else "en retard",
+                "tete": blocs[-1]["empreinte"] if blocs else None, "bloc0": self.cfg["bloc0_empreinte"],
+                "detruit": soldes.get("detruit", 0), "usage_restant": soldes.get("reserve:usage"),
+                "transactions": sum(len(b["transactions"]) for b in blocs),
+                "attente": len(self.J.lire_jsonl(self.chaine / self.J.F_ATTENTE)) if self.producteur else None,
+                "p2p": self.cfg["p2p"], "api": self.cfg["api"],
+                "pairs": [{"url": p, **{k: v for k, v in i.items()}} for p, i in self.pairs.items()],
+                "inscrit": any(tx["noeud"] == self.nom for tx in inscrits),
+                "noeuds": [{"noeud": tx["noeud"], "adresse": tx["adresse"]} for tx in inscrits],
+                "cle_blocs": self.cle_blocs(blocs),
+                "miroirs": [{"url": m, **i} for m, i in self.miroirs.items()], "depot": self.cfg.get("depot"),
+                "adresse": self.adresse(),
+                "derniere_synchro": self.derniere_synchro, "journal": JOURNAL[-30:]}
+
+    def vue_reseau(self):
+        """Le réseau vu de ce nœud : lui-même et ses pairs joignables, puissance cumulée, synchronisation."""
+        _, blocs, soldes, _ = self.etat()
+        maintenant_ = time.time()
+        noeuds = [{"nom": self.nom, "url": self.cfg.get("p2p_public") or self.cfg["p2p"], "role": self.cfg["role"],
+                   "hauteur": len(blocs), "vu": maintenant_, "erreur": None, "ici": True,
+                   "capacite": self.capacite(), "cockpit": self.cfg.get("cockpit")}]
+        for p, i in self.pairs.items():
+            noeuds.append({"nom": i.get("nom"), "url": p, "role": i.get("role"), "hauteur": i.get("hauteur"),
+                           "vu": i.get("vu"), "erreur": i.get("erreur"), "ici": False,
+                           "capacite": i.get("capacite"), "cockpit": i.get("cockpit")})
+        for n in noeuds:
+            n["actif"] = bool(n["vu"] and maintenant_ - n["vu"] < 120 and not n["erreur"])
+        actifs = [n for n in noeuds if n["actif"] and n.get("capacite")]
+        vus, caps = set(), []
+        for n in actifs:   # une machine ne compte qu'une fois, même si elle porte deux nœuds
+            if n["capacite"]["machine"] not in vus:
+                vus.add(n["capacite"]["machine"])
+                caps.append(n["capacite"])
+        gpus = [g for c in caps for g in c["gpus"]]
+        hmax = max([n["hauteur"] or 0 for n in noeuds if n["actif"]] + [len(blocs)])
+        inscrits = [tx["noeud"] for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
+        return {"total": {"noeuds_actifs": sum(n["actif"] for n in noeuds), "noeuds_connus": len(noeuds),
+                          "machines": len(caps), "gpus": len(gpus),
+                          "vram_go": round(sum(g["vram_mo"] for g in gpus) / 1024, 1),
+                          "vram_libre_go": round(sum(g["vram_mo"] - g["vram_utilisee_mo"] for g in gpus) / 1024, 1),
+                          "gpu_utilisation_pct": round(sum(g["utilisation_pct"] for g in gpus) / len(gpus)) if gpus else None,
+                          "cpu_coeurs": sum(c["cpu_coeurs"] or 0 for c in caps),
+                          "ram_go": round(sum(c["ram_mo"] or 0 for c in caps) / 1024, 1),
+                          "hauteur": hmax, "synchronises": sum(1 for n in noeuds if n["actif"] and n["hauteur"] == hmax),
+                          "inscrits": len(inscrits)},
+                "noeuds": noeuds,
+                "gains": {k[6:]: v for k, v in soldes.items() if k.startswith("noeud:")}}
+
+    def vue_portefeuille(self):
+        _, blocs, soldes, _ = self.etat()
+        a = self.adresse()
+        hist = []
+        for b in blocs:
+            for tx in b["transactions"]:
+                if tx.get("compte") == a:
+                    sens = "+" if tx["type"] in ("achat", "forfait") else "-"
+                    hist.append({"hauteur": b["hauteur"], "horodatage": tx.get("horodatage") or b["horodatage"],
+                                 "type": tx["type"], "unites": tx["unites"], "sens": sens,
+                                 "detail": tx.get("service") or (f"forfait {tx['offre']} · {euros(tx['centimes'])} € · {tx['facture']}"
+                                            if tx["type"] == "forfait" else None) or (f"usage du cockpit, lignes {tx['de']}–{tx['a']}"
+                                            if tx["type"] == "consommation" else None) or tx.get("facture"),
+                                 "noeud": tx.get("noeud"),
+                                 "id": tx["id"]})
+        return {"adresse": a, "solde": soldes.get("compte:" + a, 0), "historique": list(reversed(hist)),
+                "en_attente": self.soumises[-20:], "services": self.cfg.get("services", []),
+                "catalogue": self.J.catalogue_courant(blocs),
+                "achat_possible": self.producteur, "fichier_cle": str(self.cle_portefeuille)}
+
+    def historique_csv(self):
+        """Historique du portefeuille pour un tableur."""
+        tampon = io.StringIO()
+        w = csv.writer(tampon, delimiter=";")
+        w.writerow(["bloc", "date", "type", "sens", "unites", "detail", "noeud", "transaction"])
+        for t in self.vue_portefeuille()["historique"]:
+            w.writerow([t["hauteur"], t["horodatage"], t["type"], "credit" if t["sens"] == "+" else "debit", t["unites"],
+                        cellule_csv(t["detail"]), cellule_csv(t["noeud"]), t["id"]])
+        return tampon.getvalue().encode("utf-8-sig")
+
+    def vue_puissance(self):
+        _, blocs, soldes, _ = self.etat()
+        gpus = []
+        if shutil.which("nvidia-smi"):
+            r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,utilization.gpu,temperature.gpu",
+                                "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=6)
+            for l in r.stdout.strip().splitlines():
+                p = [x.strip() for x in l.split(",")]
+                if len(p) == 4:
+                    gpus.append({"nom": p[0], "memoire_mo": p[1], "utilisation_pct": p[2], "temperature": p[3]})
+        h_v2 = next((b["hauteur"] for b in blocs for tx in b["transactions"] if tx.get("type") == "regles"), None)
+        gains = []
+        for b in blocs:
+            for tx in b["transactions"]:
+                if tx["type"] == "epoque" and self.nom in tx.get("attributions", {}):
+                    sc = sum(self.J.points(c) for c in tx["contributions"] if c["noeud"] == self.nom)
+                    gains.append({"hauteur": b["hauteur"], "type": "epoque", "unites": tx["attributions"][self.nom],
+                                  "detail": f"époque {tx['numero']} : {sc} points sur {tx['justifie']}", "voie": None})
+                elif tx.get("noeud") == self.nom and tx["type"] == "recompense":
+                    gains.append({"hauteur": b["hauteur"], "type": "recompense", "unites": tx["unites"],
+                                  "detail": f"{tx.get('mission', '')} / {tx.get('etape', '')}", "voie": tx.get("voie")})
+                elif tx.get("noeud") == self.nom and tx["type"] == "depense" and (h_v2 is None or b["hauteur"] < h_v2):
+                    gains.append({"hauteur": b["hauteur"], "type": "depense",
+                                  "unites": tx["unites"] - tx["unites"] * self.J.DESTRUCTION_PCT // 100,
+                                  "detail": tx.get("service"), "voie": None})
+        noeuds = {k[6:]: v for k, v in soldes.items() if k.startswith("noeud:")}
+        return {"noeud": self.nom, "gpus": gpus, "solde_noeud": soldes.get("noeud:" + self.nom, 0),
+                "gains": list(reversed(gains))[:60], "classement": sorted(noeuds.items(), key=lambda x: -x[1]),
+                "regle": ("rétribution par époque hebdomadaire (mercredi 12:00 UTC) : points de travail (secondes d'une "
+                          "étape de mission validée × 2 si rejeu exact, × 1 si propriétés) et de validation (1 par reçu "
+                          "signé PASS ou FAIL), parts au prorata d'un budget qui diminue de moitié chaque année")
+                         if h_v2 else
+                         f"{self.J.TAUX_SECONDE} unité par seconde de calcul d'une étape de mission validée par un reçu "
+                         f"PASS indépendant ; 80 % de chaque dépense qui le nomme"}
+
+    def vue_epoque(self):
+        """Époque en cours (projection, chez le producteur qui lit les reçus) et époques closes (sur la chaîne)."""
+        _, blocs, soldes, preuves = self.etat()
+        closes = [{"numero": tx["numero"], "debut": tx["debut"], "fin": tx["fin"], "budget": tx["budget"],
+                   "justifie": tx["justifie"], "emis": tx["emis"], "attributions": tx["attributions"],
+                   "contributions": len(tx["contributions"]), "hauteur": b["hauteur"]}
+                  for b in blocs for tx in b["transactions"] if tx.get("type") == "epoque"]
+        k = closes[-1]["numero"] + 1 if closes else max(0, self.J.epoque_de(self.J.maintenant()))
+        debut, fin = self.J.fenetre(k)
+        courante = {"numero": k, "debut": debut, "fin": fin, "budget": self.J.budget_epoque(k),
+                    "regles_v2": "regles:2" in preuves}
+        if self.producteur and blocs:
+            try:
+                p = self.J.projeter_epoque(k, soldes, preuves)
+                courante.update(justifie=p["justifie"], emis_projete=p["emis"], scores=p["scores"],
+                                attributions_projetees=p["attributions"], contributions=len(p["contributions"]))
+            except (OSError, ValueError, self.J.Refus) as e:
+                courante["erreur"] = str(e)
+        return {"courante": courante, "closes": list(reversed(closes)),
+                "calendrier": {"epoques": self.J.EPOQUES_TOTAL, "budget_initial": self.J.BUDGET_0,
+                               "halving_toutes": 52, "poids": self.J.POIDS_GARANTIE}}
+
+    def vue_blocs(self, n=30):
+        _, blocs, _, _ = self.etat()
+        return [{"hauteur": b["hauteur"], "empreinte": b["empreinte"], "precedent": b["precedent"],
+                 "horodatage": b["horodatage"], "producteur": b["producteur"], "racine": b["racine"],
+                 "detruit": b.get("detruit"), "transactions": [{k: v for k, v in tx.items()
+                                                                 if k not in ("signature", "cle", "euros")}
+                                                                for tx in b["transactions"]]}
+                for b in reversed(blocs[-n:])]
+
+
+# ── HTTP ──────────────────────────────────────────────────────────────────────────────────────────────
+def fabrique(noeud, local):
+    ui = Path(os.path.expanduser(noeud.cfg["ui"])).resolve()
+    origine_admise = f"http://{noeud.cfg['api']}"
+    TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+             ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json"}
+
+    class H(BaseHTTPRequestHandler):
+        server_version = f"turbo-noeud/{VERSION}"
+
+        def log_message(self, *a):
+            pass
+
+        def envoyer(self, code, obj=None, corps=None, type_="application/json; charset=utf-8", en_tetes=None):
+            data = corps if corps is not None else json.dumps(obj, ensure_ascii=False).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", type_)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            for k, v in (en_tetes or {}).items():
+                self.send_header(k, v)
+            if local:
+                self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; "
+                                 "style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def corps_json(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > MAX_CORPS:
+                raise ValueError("corps trop gros")
+            return json.loads(self.rfile.read(n) or b"{}")
+
+        def hote_refuse(self):
+            """Rebinding DNS : un site qui se fait passer pour 127.0.0.1 arrive ici avec son propre nom d'hôte."""
+            if local and self.headers.get("Host") != noeud.cfg["api"]:
+                self.envoyer(403, {"ok": False, "erreur": "hôte refusé"})
+                return True
+            return False
+
+        def do_GET(self):
+            if self.hote_refuse():
+                return None
+            u = urllib.parse.urlparse(self.path)
+            q = urllib.parse.parse_qs(u.query)
+            try:
+                if u.path == "/p2p/info":
+                    a = (q.get("annonce") or [""])[0]
+                    if a and len(noeud.candidats) < 64 and ANNONCE.fullmatch(a):
+                        noeud.candidats.add(a)
+                    _, blocs, _, _ = noeud.etat()
+                    return self.envoyer(200, {"nom": noeud.nom, "role": noeud.cfg["role"], "version": VERSION,
+                                              "hauteur": len(blocs), "bloc0": noeud.cfg["bloc0_empreinte"],
+                                              "tete": blocs[-1]["empreinte"] if blocs else None,
+                                              "pairs": [p for p, i in noeud.pairs.items() if i.get("vu")],
+                                              "p2p_public": noeud.cfg.get("p2p_public"), "cockpit": noeud.cfg.get("cockpit"),
+                                              "capacite": noeud.capacite()})
+                if u.path == "/p2p/bloc0":
+                    return self.envoyer(200, corps=noeud.bloc0_chemin.read_bytes())
+                if u.path == "/p2p/blocs":
+                    _, blocs, _, _ = noeud.etat()
+                    d = max(0, int((q.get("depuis") or ["0"])[0]))
+                    return self.envoyer(200, {"blocs": blocs[d:d + 200]})
+                if not local:
+                    return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
+                vues = {"/api/etat": noeud.vue_etat, "/api/portefeuille": noeud.vue_portefeuille,
+                        "/api/puissance": noeud.vue_puissance, "/api/blocs": noeud.vue_blocs,
+                        "/api/epoque": noeud.vue_epoque, "/api/reseau": noeud.vue_reseau}
+                if u.path in vues:
+                    return self.envoyer(200, vues[u.path]())
+                if u.path == "/api/compte":
+                    try:
+                        return self.envoyer(200, noeud.compte((q.get("adresse") or [""])[0].strip()))
+                    except noeud.J.Refus as e:
+                        return self.envoyer(400, {"ok": False, "erreur": str(e)})
+                if u.path == "/api/historique.csv":
+                    return self.envoyer(200, corps=noeud.historique_csv(), type_="text/csv; charset=utf-8",
+                                        en_tetes={"Content-Disposition": 'attachment; filename="historique-turbo-essai.csv"'})
+                chemin = (ui / (u.path.lstrip("/") or "index.html")).resolve()
+                if chemin.is_dir():
+                    chemin = chemin / "index.html"
+                if ui not in chemin.parents and chemin != ui or not chemin.is_file():
+                    return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
+                return self.envoyer(200, corps=chemin.read_bytes(),
+                                    type_=TYPES.get(chemin.suffix, "application/octet-stream"))
+            except (ValueError, OSError) as e:
+                return self.envoyer(500, {"ok": False, "erreur": f"{e.__class__.__name__}"})
+
+        def do_POST(self):
+            if self.hote_refuse():
+                return None
+            u = urllib.parse.urlparse(self.path)
+            try:
+                if u.path == "/p2p/tx":
+                    return self.envoyer(200, noeud.recevoir(self.corps_json(), f"pair {self.client_address[0]}"))
+                if not local:
+                    return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
+                if self.headers.get("Origin") not in (None, origine_admise):
+                    return self.envoyer(403, {"ok": False, "erreur": "origine refusée"})
+                d = self.corps_json()
+                if u.path == "/api/depenser":
+                    return self.envoyer(200, noeud.depenser(d.get("unites"), d.get("service", ""), d.get("noeud")))
+                if u.path == "/api/acheter-forfait":
+                    return self.envoyer(200, noeud.acheter_forfait(d.get("offre")))
+                if u.path == "/api/acheter":
+                    return self.envoyer(200, noeud.acheter(d.get("unites")))
+                if u.path == "/api/inscrire":
+                    return self.envoyer(200, noeud.inscrire())
+                if u.path == "/api/demande-inscription":
+                    return self.envoyer(200, noeud.demande_inscription())
+                if u.path == "/api/synchroniser":
+                    noeud.synchroniser()
+                    if noeud.producteur:
+                        noeud.sceller_si_besoin()
+                    return self.envoyer(200, {"ok": True})
+                return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
+            except noeud.J.Refus as e:
+                return self.envoyer(400, {"ok": False, "erreur": str(e)})
+            except (ValueError, TypeError, KeyError) as e:
+                return self.envoyer(400, {"ok": False, "erreur": f"requête invalide ({e.__class__.__name__})"})
+    return H
+
+
+def ecouter(adresse, handler):
+    hote, port = adresse.rsplit(":", 1)
+    s = ThreadingHTTPServer((hote, int(port)), handler)
+    s.daemon_threads = True
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    return s
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--config", required=True)
+    a = ap.parse_args()
+    cfg = json.loads(Path(os.path.expanduser(a.config)).read_text())
+    if not cfg["api"].startswith("127.0.0.1:"):
+        sys.exit("l'API du portefeuille n'écoute que sur 127.0.0.1")
+    n = Noeud(cfg)
+    ecouter(cfg["api"], fabrique(n, local=True))
+    for adr in str(cfg["p2p"]).split(","):
+        ecouter(adr.strip(), fabrique(n, local=False))
+    noter(f"nœud {n.nom} ({cfg['role']}) · portefeuille http://{cfg['api']}/ · pair-à-pair {cfg['p2p']} · "
+          f"{len(n.pairs)} pair(s) · adresse {n.adresse()}")
+    n.boucle()
+
+
+if __name__ == "__main__":
+    main()

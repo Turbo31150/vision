@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""importer-demande — côté producteur : importe une demande d'inscription de nœud déposée en ticket sur le dépôt.
+
+La demande est une transaction « inscription » signée par la clé du nœud demandeur (données publiques seulement). Cet
+outil l'extrait du texte du ticket (bloc ```json … ```), contrôle sa forme, puis la remet au nœud producteur LOCAL par
+son entrée pair-à-pair (127.0.0.1) : c'est le producteur qui vérifie la signature et l'unicité, et qui refuse sinon.
+Rien n'est lu sur Internet : on colle le texte du ticket dans un fichier, ou sur l'entrée standard.
+
+  importer-demande ticket.txt [--p2p 127.0.0.1:8862] [--essai]
+  importer-demande - < ticket.txt
+  --essai : contrôle et affiche, sans rien remettre au producteur.
+"""
+import argparse
+import json
+import re
+import sys
+import urllib.error
+import urllib.request
+
+CHAMPS = {"type", "noeud", "cle", "adresse", "portefeuille", "horodatage", "signature", "id"}
+
+
+def extraire(texte):
+    m = re.search(r"```json\s*(\{.*?\})\s*```", texte, re.S) or re.search(r"(\{.*\})", texte, re.S)
+    if not m:
+        raise ValueError("aucune transaction JSON dans le texte")
+    tx = json.loads(m.group(1))
+    if tx.get("type") != "inscription":
+        raise ValueError(f"type {tx.get('type')!r} : seule une inscription s'importe ainsi")
+    inconnus = set(tx) - CHAMPS
+    if inconnus:
+        raise ValueError(f"champs inattendus : {sorted(inconnus)}")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,47}", str(tx.get("noeud", ""))):
+        raise ValueError("nom de nœud invalide")
+    for k in ("adresse", "portefeuille"):
+        if k in tx and not re.fullmatch(r"te1[0-9a-f]{40}", str(tx[k])):
+            raise ValueError(f"{k} invalide")
+    if not str(tx.get("cle", "")).startswith("ssh-ed25519 ") or "PRIVATE" in json.dumps(tx):
+        raise ValueError("clé publique ed25519 attendue (et jamais une clé privée)")
+    return tx
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("fichier")
+    ap.add_argument("--p2p", default="127.0.0.1:8862")
+    ap.add_argument("--essai", action="store_true")
+    a = ap.parse_args()
+    if not a.p2p.startswith("127.0.0.1:"):
+        sys.exit("le producteur se joint en local seulement (127.0.0.1)")
+    texte = sys.stdin.read() if a.fichier == "-" else open(a.fichier, encoding="utf-8").read()
+    try:
+        tx = extraire(texte[:64 * 1024])
+    except (ValueError, json.JSONDecodeError) as e:
+        sys.exit(f"REFUS : {e}")
+    print(f"demande : nœud « {tx['noeud']} » · adresse {tx['adresse']} · portefeuille {tx.get('portefeuille', '—')}")
+    if a.essai:
+        print("essai : rien n'a été remis au producteur")
+        return 0
+    req = urllib.request.Request(f"http://{a.p2p}/p2p/tx", data=json.dumps(tx).encode(),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            print(json.loads(r.read()))
+    except urllib.error.HTTPError as e:
+        sys.exit(f"REFUS du producteur : {json.loads(e.read() or b'{}').get('erreur', e)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

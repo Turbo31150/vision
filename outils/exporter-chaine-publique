@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""exporter-chaine-publique — écrit le miroir public de la chaîne d'essai TURBO-essai (site statique).
+
+Sorties dans DOSSIER (par défaut docs/chaine du dépôt) :
+  info.json   réseau, empreinte du bloc 0, hauteur, tête, clé publique d'origine du producteur
+  bloc0.json  bloc 0 tel quel (son empreinte le scelle)
+  blocs.json  tous les blocs, signatures comprises : un nœud les rejoue et les vérifie lui-même
+  etat.json   soldes, nœuds inscrits, puissance partagée (matériel seulement, sans adresse réseau ni nom de machine),
+              époque en cours et époques closes, pour l'explorateur
+
+Ne contient ni clé privée, ni adresse IP, ni chemin de fichier : un contrôle final refuse l'écriture sinon.
+  exporter-chaine-publique [--config ~/.local/share/turbo-noeud/config.json] [--api 127.0.0.1:8861] [DOSSIER]
+"""
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+# motifs écrits avec des classes de caractères pour que ce fichier ne se signale pas lui-même au contrôle du dépôt
+INTERDIT = re.compile(r"PRIVATE KE[Y]|/hom[e]/|/mn[t]/|/roo[t]/|\b(10|127|19[2]\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+(\.\d+)?\b"
+                      r"|gh[p]_|github_pa[t]_|s[k]-[A-Za-z0-9]{8}|AKI[A][0-9A-Z]{12}")
+
+
+def charger_chaine(cfg):
+    os.environ.update({"JETON_CHAINE": os.path.expanduser(cfg["chaine"]),
+                       "JETON_BLOC0": os.path.expanduser(cfg.get("bloc0") or str(Path(cfg["chaine"]) / "bloc0.json")),
+                       "JETON_CLE": os.path.expanduser(cfg.get("cle_producteur") or str(Path(cfg["chaine"]) / "producteur")),
+                       "JETON_VISION": "/nonexistent"})
+    outil = os.path.expanduser(cfg["outil_chaine"])
+    ch = importlib.machinery.SourceFileLoader("jeton_chaine", outil)
+    spec = importlib.util.spec_from_loader("jeton_chaine", ch)
+    j = importlib.util.module_from_spec(spec)
+    ch.exec_module(j)
+    return j
+
+
+def api(base, chemin):
+    with urllib.request.urlopen(f"http://{base}{chemin}", timeout=20) as r:
+        return json.loads(r.read())
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--config", default="~/.local/share/turbo-noeud/config.json")
+    ap.add_argument("--api", default="127.0.0.1:8861")
+    ap.add_argument("dossier", nargs="?", default=str(Path(__file__).resolve().parent.parent / "docs" / "chaine"))
+    a = ap.parse_args()
+    cfg = json.loads(Path(os.path.expanduser(a.config)).read_text())
+    J = charger_chaine(cfg)
+    bloc0, blocs, soldes, _ = J.etat_courant()
+    if not blocs:
+        sys.exit("chaîne vide : rien à exporter")
+    b0_brut = Path(os.environ["JETON_BLOC0"]).read_text()
+    if json.loads(b0_brut)["empreinte"] != cfg["bloc0_empreinte"]:
+        sys.exit("bloc 0 local différent de l'empreinte épinglée")
+    J.rejouer(blocs, bloc0, cfg["producteur_pub"])          # on n'exporte que ce qui se rejoue
+
+    reseau = api(a.api, "/api/reseau")
+    epoque = api(a.api, "/api/epoque")
+    maintenant = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    noeuds_reseau = []
+    for n in reseau["noeuds"]:
+        c = n.get("capacite") or {}
+        noeuds_reseau.append({"nom": n.get("nom"), "role": n.get("role"), "actif": n.get("actif"), "hauteur": n.get("hauteur"),
+                              "materiel": {"gpus": [{"nom": g["nom"], "vram_mo": g["vram_mo"]} for g in c.get("gpus", [])],
+                                           "cpu_coeurs": c.get("cpu_coeurs"), "ram_mo": c.get("ram_mo")} if c else None})
+    inscrits = [{"noeud": tx["noeud"], "adresse": tx["adresse"], "portefeuille": tx.get("portefeuille"), "hauteur": b["hauteur"],
+                 "horodatage": tx.get("horodatage")}
+                for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
+    info = {"reseau": "turbo-jeton-essai", "essai": True, "bloc0": cfg["bloc0_empreinte"], "hauteur": len(blocs),
+            "tete": blocs[-1]["empreinte"], "producteur_pub": cfg["producteur_pub"], "genere_le": maintenant,
+            "note": "Chaîne d'essai : unités sans valeur, non cessibles ; rien n'est vendu ni offert au public."}
+    etat = {"genere_le": maintenant, "hauteur": len(blocs), "transactions": sum(len(b["transactions"]) for b in blocs),
+            "soldes": {k: v for k, v in soldes.items() if k.startswith(("compte:", "noeud:", "reserve:")) or k == "detruit"},
+            "inscrits": inscrits, "reseau": {"total": reseau["total"], "noeuds": noeuds_reseau},
+            "epoque": {"courante": {k: epoque["courante"].get(k) for k in ("numero", "debut", "fin", "budget", "regles_v2", "justifie",
+                                                                           "emis_projete", "scores", "attributions_projetees", "contributions")},
+                       "closes": epoque["closes"], "calendrier": epoque["calendrier"]}}
+    sorties = {"info.json": json.dumps(info, ensure_ascii=False, indent=1),
+               "bloc0.json": b0_brut,
+               "blocs.json": json.dumps({"blocs": blocs}, ensure_ascii=False),
+               "etat.json": json.dumps(etat, ensure_ascii=False, indent=1)}
+    for nom, texte in sorties.items():
+        m = INTERDIT.search(texte)
+        if m:
+            sys.exit(f"REFUS : {nom} contient « {m.group(0)} » (secret, chemin ou adresse privée) : rien n'est écrit")
+    d = Path(a.dossier)
+    d.mkdir(parents=True, exist_ok=True)
+    for nom, texte in sorties.items():
+        tmp = d / (nom + ".tmp")
+        tmp.write_text(texte)
+        os.replace(tmp, d / nom)
+    print(f"miroir écrit dans {d} : hauteur {len(blocs)}, {etat['transactions']} transactions, {len(inscrits)} nœuds inscrits")
+
+
+if __name__ == "__main__":
+    main()

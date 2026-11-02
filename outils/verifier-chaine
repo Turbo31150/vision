@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""verifier-chaine : rejoue la chaîne d'essai publiée, sans faire confiance au site, au nœud ni à l'outil qui l'a produite.
+
+Écrit à part de l'outil de chaîne, sans en importer une ligne : deux programmes qui rendent le même état sur chaque bloc
+donnent une garantie qu'un seul ne donne pas. Python 3.10 et ssh-keygen, rien d'autre.
+
+  verifier-chaine DOSSIER_OU_URL [--cle-origine "ssh-ed25519 AAAA..."]
+
+DOSSIER_OU_URL contient info.json, bloc0.json et blocs.json. Sans --cle-origine, la clé d'origine vient du même site que les
+blocs : la vérification prouve alors la cohérence, pas l'origine. Obtenez cette clé par un autre canal.
+
+Codes : 0 chaîne intacte, 1 refus, 2 usage ou outil.
+"""
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from math import ceil
+
+CHAINE, FORMAT = "turbo-jeton-essai", "turbo-jeton-bloc/1"
+PRODUCTEUR = "m0"
+ESPACE_BLOC, ESPACE_TX, ESPACE_CLE = "turbo-jeton-bloc", "turbo-jeton-tx", "turbo-jeton-cle"
+RESERVE = "reserve:usage"
+EPOQUE_0 = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
+SEMAINE = timedelta(days=7)
+BUDGET_0, EPOQUES = 358_974, 208
+POIDS = {"rejeu-exact": 2, "proprietes": 1}
+NOM = re.compile(r"[a-z0-9][a-z0-9._-]{0,47}")
+ADRESSE = re.compile(r"te1[0-9a-f]{40}")
+PUB = re.compile(r"ssh-ed25519 [A-Za-z0-9+/=]{60,80}")
+HEX64 = re.compile(r"[0-9a-f]{64}")
+FACTURE = re.compile(r"ESSAI-[A-Za-z0-9-]{1,40}")
+DATE = "%Y-%m-%dT%H:%M:%SZ"
+SANS_AGENT = {k: v for k, v in os.environ.items() if k != "SSH_AUTH_SOCK"}
+
+
+class Refus(Exception):
+    pass
+
+
+def forme(x):
+    return json.dumps(x, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def h(t):
+    return hashlib.sha256(t.encode("utf-8")).hexdigest()
+
+
+def racine(ids):
+    if not ids:
+        return h("")
+    n = list(ids)
+    while len(n) > 1:
+        if len(n) % 2:
+            n.append(n[-1])
+        n = [h(a + b) for a, b in zip(n[0::2], n[1::2])]
+    return n[0]
+
+
+def signature_ok(texte, signature, pub, identite, espace):
+    if not isinstance(signature, str) or not signature.strip():
+        return False
+    with tempfile.TemporaryDirectory() as d:
+        a, s = os.path.join(d, "a"), os.path.join(d, "s")
+        with open(a, "w", encoding="utf-8") as f:
+            f.write(f'{identite} namespaces="{espace}" {pub}\n')
+        with open(s, "w", encoding="utf-8") as f:
+            f.write(signature)
+        return subprocess.run(["ssh-keygen", "-Y", "verify", "-f", a, "-I", identite, "-n", espace, "-s", s],
+                              input=texte.encode("utf-8"), capture_output=True, env=SANS_AGENT, timeout=20).returncode == 0
+
+
+def adresse_de(cle):
+    p = " ".join(str(cle).split()[:2])
+    if not PUB.fullmatch(p):
+        raise Refus("clé publique invalide")
+    return "te1" + h(p)[:40]
+
+
+def signe_par(tx, identite):
+    p = " ".join(str(tx.get("cle", "")).split()[:2])
+    if not PUB.fullmatch(p):
+        raise Refus("transaction sans clé publique valide")
+    message = forme({k: v for k, v in tx.items() if k not in ("id", "signature")})
+    if not signature_ok(message, tx.get("signature", ""), tx["cle"], identite, ESPACE_TX):
+        raise Refus("signature de transaction invalide")
+
+
+def nom(x, quoi):
+    if not isinstance(x, str) or not NOM.fullmatch(x):
+        raise Refus(f"{quoi} invalide")
+    return x
+
+
+def fenetre(k):
+    f = lambda t: t.strftime(DATE)  # noqa: E731
+    return f(EPOQUE_0 + k * SEMAINE), f(EPOQUE_0 + (k + 1) * SEMAINE)
+
+
+def numero_epoque(date):
+    return (datetime.strptime(date, DATE).replace(tzinfo=timezone.utc) - EPOQUE_0) // SEMAINE
+
+
+def budget(k):
+    return BUDGET_0 >> (k // 52) if 0 <= k < EPOQUES else 0
+
+
+class Registre:
+    """L'état rejoué : soldes, et tout ce qui ne peut servir qu'une fois."""
+
+    def __init__(self, bloc0):
+        self.bloc0, self.offre = bloc0, bloc0["offre_totale"]
+        self.soldes = {}
+        self.v2 = False
+        self.factures, self.etapes, self.noms, self.cles_noeud, self.payes, self.recus_payes = set(), set(), set(), set(), set(), set()
+        self.offres = set()
+        self.conso = {}
+        self.epoques, self.premiere = [], 0
+
+    def retirer(self, compte, n):
+        if compte.startswith("reserve:") and compte != RESERVE:
+            raise Refus(f"{compte} est bloquée")
+        if self.soldes.get(compte, 0) < n:
+            raise Refus(f"solde insuffisant sur {compte}")
+        self.soldes[compte] -= n
+
+    def ajouter(self, compte, n):
+        self.soldes[compte] = self.soldes.get(compte, 0) + n
+
+    def facture(self, tx):
+        f = tx.get("facture", "")
+        if not isinstance(f, str) or not FACTURE.fullmatch(f):
+            raise Refus("facture hors essai")
+        if f in self.factures:
+            raise Refus(f"facture déjà convertie : {f}")
+        self.factures.add(f)
+
+    def appliquer(self, tx):
+        t = tx.get("type")
+        faire = getattr(self, "t_" + str(t), None)
+        if faire is None:
+            raise Refus(f"type de transaction inconnu : {t!r}")
+        if t not in ("allocation", "inscription", "regles", "epoque", "catalogue", "cle_producteur"):
+            n = tx.get("unites")
+            if not isinstance(n, int) or isinstance(n, bool) or not 0 < n <= self.offre:
+                raise Refus(f"{t} : unités invalides")
+        faire(tx)
+        if sum(self.soldes.values()) != self.offre:
+            raise Refus("offre non conservée")
+
+    def t_allocation(self, tx):
+        if self.soldes:
+            raise Refus("allocation hors genèse")
+        for x in self.bloc0["repartition"]:
+            self.ajouter("reserve:" + x["categorie"], x["unites"])
+        self.soldes["detruit"] = 0
+        if isinstance(tx.get("horodatage"), str):
+            self.premiere = max(0, numero_epoque(tx["horodatage"]))
+
+    def t_achat(self, tx):
+        nom(tx.get("compte"), "compte")
+        self.facture(tx)
+        self.retirer(RESERVE, tx["unites"])
+        self.ajouter("compte:" + tx["compte"], tx["unites"])
+
+    def bruler(self, n):
+        d = n * 20 // 100
+        self.soldes["detruit"] += d
+        return n - d
+
+    def t_depense(self, tx):
+        c, n = nom(tx.get("compte"), "compte"), tx["unites"]
+        if ADRESSE.fullmatch(c):
+            if adresse_de(tx.get("cle", "")) != c:
+                raise Refus("clé sans rapport avec l'adresse")
+            signe_par(tx, c)
+        elif tx.get("signature"):
+            raise Refus("signature inattendue sur un compte géré")
+        s = tx.get("service")
+        if not isinstance(s, str) or not 0 < len(s) <= 120:
+            raise Refus("service absent ou trop long")
+        self.retirer("compte:" + c, n)
+        reste = self.bruler(n)
+        if self.v2:
+            if tx.get("noeud"):
+                nom(tx["noeud"], "nœud")
+            self.ajouter(RESERVE, reste)
+        else:
+            self.ajouter("noeud:" + nom(tx["noeud"], "nœud") if tx.get("noeud") else RESERVE, reste)
+
+    def t_recompense(self, tx):
+        if self.v2:
+            raise Refus("récompense immédiate fermée en v2")
+        nom(tx.get("noeud"), "nœud")
+        p = tx.get("preuve")
+        if not isinstance(p, str) or not HEX64.fullmatch(p) or p in self.etapes:
+            raise Refus("preuve absente ou déjà payée")
+        self.etapes.add(p)
+        self.retirer(RESERVE, tx["unites"])
+        self.ajouter("noeud:" + tx["noeud"], tx["unites"])
+
+    def t_inscription(self, tx):
+        nom(tx.get("noeud"), "nœud")
+        if tx.get("adresse") != adresse_de(tx.get("cle", "")):
+            raise Refus("adresse sans rapport avec la clé")
+        signe_par(tx, tx["noeud"])
+        if tx["noeud"] in self.noms or tx["adresse"] in self.cles_noeud:
+            raise Refus("inscription en double")
+        self.noms.add(tx["noeud"])
+        self.cles_noeud.add(tx["adresse"])
+
+    def t_catalogue(self, tx):
+        o = tx.get("offres")
+        if not isinstance(o, dict) or not o:
+            raise Refus("catalogue vide")
+        for k, v in o.items():
+            nom(k, "offre")
+            c, u = v.get("centimes"), v.get("unites")
+            if not (isinstance(c, int) and c > 0 and isinstance(u, int) and 0 < u <= 10_000_000):
+                raise Refus("offre invalide")
+            self.offres.add((k, c, u))
+
+    def t_forfait(self, tx):
+        nom(tx.get("compte"), "compte")
+        if tx.get("client") is not None:
+            nom(tx["client"], "client")
+        if (tx.get("offre"), tx.get("centimes"), tx["unites"]) not in self.offres:
+            raise Refus("forfait hors catalogue")
+        self.facture(tx)
+        self.retirer(RESERVE, tx["unites"])
+        self.ajouter("compte:" + tx["compte"], tx["unites"])
+
+    def t_consommation(self, tx):
+        nom(tx.get("compte"), "compte")
+        nom(tx.get("client"), "client")
+        de, a = tx.get("de"), tx.get("a")
+        if not (isinstance(de, int) and isinstance(a, int) and 0 < de <= a) or de <= self.conso.get(tx["client"], 0):
+            raise Refus("plage d'usage invalide ou déjà débitée")
+        self.retirer("compte:" + tx["compte"], tx["unites"])
+        self.ajouter(RESERVE, self.bruler(tx["unites"]))
+        self.conso[tx["client"]] = a
+
+    def t_regles(self, tx):
+        if tx.get("version") != 2 or self.v2 or not isinstance(tx.get("motif"), str) or not tx["motif"]:
+            raise Refus("changement de règles invalide")
+        self.v2 = True
+
+    def t_cle_producteur(self, tx):
+        if not isinstance(tx.get("motif"), str) or not tx["motif"]:
+            raise Refus("changement de clé sans motif")
+
+    def t_epoque(self, tx):
+        if not self.v2:
+            raise Refus("époque avant les règles v2")
+        k = tx.get("numero")
+        attendu = self.epoques[-1] + 1 if self.epoques else self.premiere
+        if not isinstance(k, int) or k != attendu:
+            raise Refus("époque hors séquence")
+        debut, fin = fenetre(k)
+        if (tx.get("debut"), tx.get("fin")) != (debut, fin) or not isinstance(tx.get("horodatage"), str) or tx["horodatage"] < fin:
+            raise Refus("fenêtre d'époque fausse ou époque non terminée")
+        if tx.get("budget") != budget(k):
+            raise Refus("budget d'époque faux")
+        scores, vus = {}, set()
+        for c in tx.get("contributions", []):
+            nom(c.get("noeud"), "nœud")
+            p = c.get("preuve", "")
+            if not isinstance(p, str) or not HEX64.fullmatch(p):
+                raise Refus("contribution sans preuve")
+            if c.get("role") == "travail":
+                dedans, pts = self.payes, max(1, ceil(int(c["duree_ms"]) / 1000)) * POIDS.get(c.get("garantie"), 1)
+                if p in self.etapes:
+                    raise Refus("contribution déjà payée")
+            elif c.get("role") == "validation":
+                dedans, pts = self.recus_payes, 1
+            else:
+                raise Refus("rôle de contribution inconnu")
+            if (c["role"], p) in vus or p in dedans or not debut <= str(c.get("horodatage", "")) < fin:
+                raise Refus("contribution en double ou hors époque")
+            vus.add((c["role"], p))
+            scores[c["noeud"]] = scores.get(c["noeud"], 0) + pts
+        justifie = sum(scores.values())
+        plafond = min(tx["budget"], justifie, self.soldes.get(RESERVE, 0))
+        parts = {n: s * plafond // justifie for n, s in scores.items()} if justifie else {}
+        parts = {n: u for n, u in parts.items() if u > 0}
+        emis = sum(parts.values())
+        if (tx.get("scores"), tx.get("justifie"), tx.get("emis"), tx.get("attributions")) != (scores, justifie, emis, parts):
+            raise Refus("répartition d'époque différente du recalcul")
+        if emis:
+            self.retirer(RESERVE, emis)
+        for n, u in parts.items():
+            self.ajouter("noeud:" + n, u)
+        for role, p in vus:
+            (self.payes if role == "travail" else self.recus_payes).add(p)
+        self.epoques.append(k)
+
+
+def controler_bloc0(b):
+    c = {k: v for k, v in b.items() if k not in ("empreinte", "signature")}
+    if h(json.dumps(c, ensure_ascii=False, sort_keys=True)) != b.get("empreinte"):
+        raise Refus("bloc 0 altéré")
+    if sum(x["unites"] for x in b["repartition"]) != b["offre_totale"]:
+        raise Refus("répartition du bloc 0 incohérente")
+
+
+def rejouer(bloc0, blocs, cle):
+    """Renvoie (registre, nombre de transactions, changements de clé). Lève Refus au premier écart."""
+    controler_bloc0(bloc0)
+    r, prec, ntx, changes = Registre(bloc0), bloc0["empreinte"], 0, []
+    for i, b in enumerate(blocs, 1):
+        try:
+            if b.get("chaine") != CHAINE or b.get("version_format") != FORMAT or b.get("essai") is not True:
+                raise Refus("chaîne ou format inconnu")
+            if b.get("hauteur") != i or b.get("precedent") != prec or b.get("bloc0") != bloc0["empreinte"]:
+                raise Refus("bloc mal placé")
+            txs = b.get("transactions") or []
+            for tx in txs:
+                if tx.get("id") != h(forme({k: v for k, v in tx.items() if k != "id"})):
+                    raise Refus("transaction altérée")
+            if b.get("racine") != racine([tx["id"] for tx in txs]):
+                raise Refus("racine de Merkle fausse")
+            if i == 1 and [tx.get("type") for tx in txs] != ["allocation"]:
+                raise Refus("le bloc 1 ne contient que l'allocation")
+            for tx in txs:
+                r.appliquer(tx)
+                ntx += 1
+            if b.get("soldes") != h(forme(r.soldes)) or b.get("detruit") != r.soldes.get("detruit", 0):
+                raise Refus("état des soldes différent du rejeu")
+            if b.get("empreinte") != h(forme({k: v for k, v in b.items() if k not in ("empreinte", "signature")})):
+                raise Refus("empreinte du bloc fausse")
+            if not signature_ok(b["empreinte"], b.get("signature", ""), cle, PRODUCTEUR, ESPACE_BLOC):
+                raise Refus("signature du producteur invalide")
+            for tx in txs:     # l'ancienne clé signe le bloc qui la remplace : la nouvelle vaut au bloc suivant
+                if tx.get("type") == "cle_producteur":
+                    neuve = str(tx.get("nouvelle", ""))
+                    if not PUB.fullmatch(neuve) or neuve == cle:
+                        raise Refus("nouvelle clé invalide")
+                    m = forme({"chaine": CHAINE, "ancienne": cle, "nouvelle": neuve, "horodatage": tx.get("horodatage")})
+                    if not signature_ok(m, tx.get("preuve", ""), neuve, PRODUCTEUR, ESPACE_CLE):
+                        raise Refus("preuve de possession invalide")
+                    cle = neuve
+                    changes.append(i)
+        except Refus as e:
+            raise Refus(f"bloc {i} : {e}") from None
+        prec = b["empreinte"]
+    return r, ntx, changes
+
+
+def lire(source, nom_fichier):
+    if re.match(r"https://", source):
+        req = urllib.request.Request(source.rstrip("/") + "/" + nom_fichier, headers={"User-Agent": "verifier-chaine"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+    with open(os.path.join(source, nom_fichier), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main():
+    a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    a.add_argument("source")
+    a.add_argument("--cle-origine")
+    o = a.parse_args()
+    try:
+        info, bloc0, blocs = lire(o.source, "info.json"), lire(o.source, "bloc0.json"), lire(o.source, "blocs.json")["blocs"]
+        cle = " ".join((o.cle_origine or info["producteur_pub"]).split()[:2])
+        if info.get("bloc0") != bloc0.get("empreinte"):
+            raise Refus("info.json annonce un autre bloc 0")
+        r, ntx, changes = rejouer(bloc0, blocs, cle)
+        if info.get("hauteur") != len(blocs) or (blocs and info.get("tete") != blocs[-1]["empreinte"]):
+            raise Refus("info.json ne correspond pas aux blocs")
+        print(f"CHAÎNE INTACTE : {len(blocs)} bloc(s), {ntx} transaction(s), offre {r.offre:_} conservée, {r.soldes.get('detruit', 0)} détruites, "
+              f"{len(r.noms)} nœud(s) inscrit(s), {len(r.epoques)} époque(s) close(s)".replace("_", " "))
+        if changes:
+            print("Changement de clé des blocs déclaré au bloc " + ", ".join(map(str, changes)))
+        if not o.cle_origine:
+            print("Attention : clé d'origine lue sur le même site que les blocs. Cela prouve la cohérence, pas l'origine.")
+    except Refus as e:
+        print(f"REFUS : {e}")
+        return 1
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
+        print(f"ERREUR : {e.__class__.__name__} : {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

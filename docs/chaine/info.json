@@ -1,0 +1,10 @@
+{
+ "reseau": "turbo-jeton-essai",
+ "essai": true,
+ "bloc0": "e5ef70671ea77ffe452dcdc9670ca498cfd86ffd06404dccc7c9d0783e922267",
+ "hauteur": 14,
+ "tete": "edd158071c897e0069b486c0dae3f6c3bf3e786d8606cc3462105131dbf647fc",
+ "producteur_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQ782mQOcqO0AkeTQspSsD6/fkVifm1qkDcIcM6L4Tp",
+ "genere_le": "2026-11-02T15:16:00Z",
+ "note": "Chaîne d'essai : unités sans valeur, non cessibles ; rien n'est vendu ni offert au public."
+}
