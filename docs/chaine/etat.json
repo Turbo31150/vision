@@ -1,28 +1,103 @@
 {
- "genere_le": "2026-11-02T15:24:00Z",
- "hauteur": 2,
- "transactions": 2,
+ "genere_le": "2026-11-02T18:06:28Z",
+ "hauteur": 3,
+ "transactions": 5,
  "soldes": {
-  "reserve:usage": 35000000,
-  "detruit": 0
+  "reserve:usage": 34970000,
+  "detruit": 0,
+  "compte:te1a29125a7f6ee5529a0d70bab7d8632145083e685": 10000,
+  "compte:te1026a6c51a42a62a99d5729a3f7935b160d6cd71a": 10000,
+  "compte:te177b1ad60d6721cc8b7a9d77bd3eff0daf966b838": 10000
  },
  "inscrits": [],
  "reseau": {
   "total": {
-   "noeuds_actifs": 0,
-   "noeuds_connus": 0,
-   "machines": 0,
-   "gpus": 0,
-   "vram_go": 0,
-   "vram_libre_go": 0,
-   "gpu_utilisation_pct": 0,
-   "cpu_coeurs": 0,
-   "ram_go": 0,
+   "noeuds_actifs": 4,
+   "noeuds_connus": 4,
+   "machines": 3,
+   "gpus": 4,
+   "vram_go": 36.0,
+   "vram_libre_go": 3.7,
+   "gpu_utilisation_pct": 6,
+   "cpu_coeurs": 24,
+   "ram_go": 89.3,
    "hauteur": 2,
-   "synchronises": 0,
+   "synchronises": 4,
    "inscrits": 0
   },
-  "noeuds": []
+  "noeuds": [
+   {
+    "nom": "m0",
+    "role": "pair",
+    "actif": true,
+    "hauteur": 2,
+    "materiel": {
+     "gpus": [
+      {
+       "nom": "NVIDIA GeForce RTX 2060",
+       "vram_mo": 12288
+      },
+      {
+       "nom": "NVIDIA GeForce RTX 3080",
+       "vram_mo": 10240
+      }
+     ],
+     "cpu_coeurs": 16,
+     "ram_mo": 48089
+    }
+   },
+   {
+    "nom": "m6",
+    "role": "pair",
+    "actif": true,
+    "hauteur": 2,
+    "materiel": {
+     "gpus": [
+      {
+       "nom": "NVIDIA GeForce GTX 1660 SUPER",
+       "vram_mo": 6144
+      },
+      {
+       "nom": "Quadro RTX 4000",
+       "vram_mo": 8192
+      }
+     ],
+     "cpu_coeurs": 4,
+     "ram_mo": 32051
+    }
+   },
+   {
+    "nom": "portable",
+    "role": "pair",
+    "actif": true,
+    "hauteur": 2,
+    "materiel": {
+     "gpus": [],
+     "cpu_coeurs": 4,
+     "ram_mo": 11337
+    }
+   },
+   {
+    "nom": "m0",
+    "role": "pair",
+    "actif": true,
+    "hauteur": 2,
+    "materiel": {
+     "gpus": [
+      {
+       "nom": "NVIDIA GeForce RTX 2060",
+       "vram_mo": 12288
+      },
+      {
+       "nom": "NVIDIA GeForce RTX 3080",
+       "vram_mo": 10240
+      }
+     ],
+     "cpu_coeurs": 16,
+     "ram_mo": 48089
+    }
+   }
+  ]
  },
  "epoque": {
   "courante": {
