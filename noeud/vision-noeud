@@ -23,13 +23,17 @@ Unités d'essai sans valeur ; rien n'est vendu ni offert au public.
 """
 import argparse
 import csv
+import http.client
 import importlib.machinery
 import importlib.util
 import io
+import hmac
 import json
 import os
 import re
+import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -46,6 +50,22 @@ VERSION = "0.5.1-essai"
 ANNONCE = re.compile(r"http://(127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+"
                      r"|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+):\d{2,5}")
 MAX_CORPS = 64 * 1024
+# Plafonds (audit R2, S-02/S-03/S-15) ; surcharge possible par la clé « limites » de la configuration.
+LIMITES = {"delai_socket_s": 10,       # lecture d'une requête entrante (en-têtes et corps) : contre le goutte-à-goutte
+           "max_simultanees": 32,      # requêtes traitées en même temps par écoute ; au-delà : 503 immédiat
+           "max_par_pair": 4,          # connexions simultanées par adresse distante sur l'écoute pair-à-pair
+           "budget_pair_s": 10,        # durée TOTALE d'un échange sortant avec un pair (en-têtes et corps compris)
+           "max_pairs": 32,            # pairs retenus au plus (configurés compris)
+           "echecs_avant_oubli": 12,   # cycles en échec avant d'oublier un pair appris (jamais un pair configuré)
+           "vus_relais": 4096,         # empreintes de transactions déjà relayées (anti-boucle de relais)
+           "vus_ttl_s": 600}
+
+
+class Trop(Exception):
+    """Requête refusée avant toute lecture du corps (code HTTP porté par l'exception)."""
+    def __init__(self, code, msg):
+        super().__init__(msg)
+        self.code = code
 TYPES_P2P = {"depense", "inscription"}      # seuls types acceptés d'un pair : signés par leur auteur
 VERROU = threading.RLock()
 JOURNAL = []
@@ -66,6 +86,18 @@ def cellule_csv(x):
     """Une cellule de tableur ne commence jamais par une formule."""
     x = "" if x is None else str(x)
     return "'" + x if x[:1] in ("=", "+", "-", "@") else x
+
+
+def passe_local(f):
+    """Secret lisible par le seul propriétaire, exigé par tout POST de l'API locale. Il reste le même d'un démarrage à l'autre."""
+    f = Path(f)
+    try:
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return f.read_text().strip()
+    with os.fdopen(fd, "w") as h:
+        h.write(secrets.token_urlsafe(32) + "\n")
+    return f.read_text().strip()
 
 
 class Noeud:
@@ -92,10 +124,14 @@ class Noeud:
         self.bloc0_chemin = Path(bloc0)
         self.cle_portefeuille = Path(os.path.expanduser(cfg["portefeuille"]))
         self.cle_noeud = Path(os.path.expanduser(cfg["cle_noeud"]))
+        self.passe_local = passe_local(self.cle_noeud.parent / "passe-local")
         self.pairs = {p: {"vu": None, "hauteur": None, "erreur": None} for p in cfg.get("pairs", [])}
         self.soumises = []      # transactions parties de ce nœud, en attente d'un bloc
         self.derniere_synchro = None
         self.candidats = set()  # pairs qui se sont annoncés, à sonder avant de les retenir
+        self.limites = {**LIMITES, **cfg.get("limites", {})}
+        self.pairs_configures = set(cfg.get("pairs", []))
+        self.vus, self.verrou_vus = {}, threading.Lock()   # anti-boucle : empreinte du message → instant du relais
         self._capacite = (0, None)
         self.miroirs = {m.rstrip("/"): {"vu": None, "hauteur": None, "erreur": None}
                         for m in cfg.get("miroirs", []) if re.fullmatch(r"https://[\w.-]+(/[\w./-]*)?", m)}
@@ -149,10 +185,37 @@ class Noeud:
 
     # ── synchronisation (pair) ────────────────────────────────────────────────────────────────────
     def http(self, url, donnees=None, delai=8):
-        req = urllib.request.Request(url, data=None if donnees is None else json.dumps(donnees).encode(),
-                                     headers={"Content-Type": "application/json", "User-Agent": f"vision-noeud/{VERSION}"})
-        with urllib.request.urlopen(req, timeout=delai) as r:
-            return json.loads(r.read(4 * 1024 * 1024))
+        """Échange borné avec un pair : http seulement (ni file:, ni https détourné), délai par lecture ET budget
+        total, 4 Mio au plus. Un pair qui répond au goutte-à-goutte est coupé au bout de budget_pair_s."""
+        u = urllib.parse.urlsplit(url)
+        if u.scheme != "http" or not u.hostname:
+            raise ValueError(f"adresse de pair refusée : {url[:60]!r}")
+        corps = None if donnees is None else json.dumps(donnees).encode()
+        c = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=delai)
+        def couper():
+            try:
+                if c.sock is not None:
+                    c.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        minuterie = threading.Timer(self.limites["budget_pair_s"], couper)
+        minuterie.daemon = True
+        minuterie.start()
+        try:
+            c.request("GET" if corps is None else "POST", (u.path or "/") + (f"?{u.query}" if u.query else ""), body=corps,
+                      headers={"Content-Type": "application/json", "User-Agent": f"vision-noeud/{VERSION}"})
+            r = c.getresponse()
+            data = r.read(4 * 1024 * 1024 + 1)
+            if len(data) > 4 * 1024 * 1024:
+                raise ValueError("réponse de pair trop grosse")
+            if r.status >= 400:
+                raise urllib.error.HTTPError(url, r.status, r.reason, r.headers, io.BytesIO(data))
+            return json.loads(data)
+        except http.client.HTTPException as e:
+            raise OSError(f"pair : {e.__class__.__name__}") from e
+        finally:
+            minuterie.cancel()
+            c.close()
 
     def sonder_candidats(self):
         """Un pair annoncé n'est retenu qu'après une vérification : il répond, sur le même bloc 0."""
@@ -173,6 +236,7 @@ class Noeud:
         for p, info in list(self.pairs.items()):
             try:
                 q = "?annonce=" + urllib.parse.quote(self.cfg["p2p_public"], safe="") if self.cfg.get("p2p_public") else ""
+                info["echecs"] = info.get("echecs", 0) + 1     # remis à zéro si le tour aboutit
                 i = self.http(p + "/p2p/info" + q)
                 info["capacite"] = i.get("capacite")
                 info["cockpit"] = i.get("cockpit")
@@ -180,14 +244,16 @@ class Noeud:
                 if i.get("bloc0") != self.cfg["bloc0_empreinte"]:
                     info["erreur"] = "pair sur un autre bloc 0 : ignoré"
                     continue
-                for autre in i.get("pairs", []):    # échange de pairs, sans jamais s'ajouter soi-même
-                    if autre not in self.pairs and autre != self.cfg.get("p2p_public") and len(self.pairs) < 32:
+                info["echecs"] = 0
+                for autre in i.get("pairs", [])[:64]:    # échange de pairs : même filtre qu'une annonce, plafond
+                    if (isinstance(autre, str) and ANNONCE.fullmatch(autre) and autre not in self.pairs
+                            and autre != self.cfg.get("p2p_public") and len(self.pairs) < self.limites["max_pairs"]):
                         self.pairs[autre] = {"vu": None, "hauteur": None, "erreur": None}
                 if self.producteur:
                     continue
+                b0 = None if self.bloc0_chemin.exists() else self.http(p + "/p2p/bloc0")   # réseau hors verrou
                 with VERROU:
-                    if not self.bloc0_chemin.exists():
-                        b0 = self.http(p + "/p2p/bloc0")
+                    if b0 is not None and not self.bloc0_chemin.exists():
                         tmp = self.bloc0_chemin.with_suffix(".tmp")
                         tmp.write_text(json.dumps(b0, ensure_ascii=False))
                         self.J.charger_bloc0(tmp)
@@ -196,10 +262,14 @@ class Noeud:
                         os.replace(tmp, self.bloc0_chemin)
                         noter(f"bloc 0 reçu de {p} et vérifié")
                     bloc0, blocs, _, _ = self.J.etat_courant()
-                    if (i.get("hauteur") or 0) <= len(blocs):
-                        continue
-                    nouveaux = self.http(p + f"/p2p/blocs?depuis={len(blocs)}").get("blocs", [])
-                    self.J.rejouer(blocs + nouveaux, bloc0, self.cfg["producteur_pub"])
+                if (i.get("hauteur") or 0) <= len(blocs):
+                    continue
+                nouveaux = self.http(p + f"/p2p/blocs?depuis={len(blocs)}").get("blocs", [])   # réseau hors verrou
+                with VERROU:
+                    _, actuels, _, _ = self.J.etat_courant()
+                    if len(actuels) != len(blocs):
+                        continue    # la chaîne locale a bougé pendant le téléchargement : prochain tour
+                    self.J.verifier_suite(nouveaux)    # mêmes contrôles, depuis l'état déjà vérifié
                     for b in nouveaux:
                         self.J.ajouter_jsonl(self.chaine / self.J.F_BLOCS, b)
                     if nouveaux:
@@ -213,6 +283,10 @@ class Noeud:
                 noter(f"{p} : {e}")
             except (OSError, ValueError, urllib.error.URLError) as e:
                 info["erreur"] = f"injoignable : {e.__class__.__name__}"
+        for p in [p for p, x in self.pairs.items() if p not in self.pairs_configures
+                  and x.get("echecs", 0) >= self.limites["echecs_avant_oubli"]]:
+            del self.pairs[p]
+            noter(f"pair oublié après {self.limites['echecs_avant_oubli']} échecs : {p}")
         if not self.producteur:
             self.synchroniser_miroirs()
         self.derniere_synchro = time.time()
@@ -271,11 +345,19 @@ class Noeud:
             self.J.ecrire_jsonl(self.chaine / self.J.F_ATTENTE, [])
             noter(f"bloc {b['hauteur']} scellé : {len(attente)} transaction(s), {b['empreinte'][:12]}…")
 
-    def boucle(self):
+    def boucle_scellement(self):
         while True:
             try:
-                if self.producteur:
-                    self.sceller_si_besoin()
+                self.sceller_si_besoin()
+            except Exception as e:  # noqa: BLE001
+                noter(f"scellement : {e.__class__.__name__} : {e}")
+            time.sleep(self.cfg.get("cadence_s", 10))
+
+    def boucle(self):
+        if self.producteur:     # un pair lent ne retarde plus jamais un bloc
+            threading.Thread(target=self.boucle_scellement, daemon=True).start()
+        while True:
+            try:
                 self.synchroniser()
             except Exception as e:  # noqa: BLE001 — la boucle d'un nœud ne meurt pas sur une erreur
                 noter(f"boucle : {e.__class__.__name__} : {e}")
@@ -288,26 +370,48 @@ class Noeud:
             raise self.J.Refus(f"type refusé sur le réseau : {tx.get('type')!r}")
         if tx.get("type") == "depense" and not self.J.ADRESSE.fullmatch(str(tx.get("compte", ""))):
             raise self.J.Refus("seul un compte de portefeuille signé peut dépenser depuis le réseau")
+        if not self.producteur:
+            # 1) signature contrôlée AVANT de marquer « vue » : une copie à signature fausse ne peut pas bloquer
+            #    le relais de la vraie (même leçon que BIP 339 côté Bitcoin) ;
+            ident = tx.get("compte") if tx.get("type") == "depense" else tx.get("noeud")
+            if tx.get("type") == "depense" and self.J.adresse(tx.get("cle", "")) != tx.get("compte"):
+                raise self.J.Refus("la clé ne correspond pas à l'adresse du compte")
+            self.J.controler_signature(tx, str(ident), self.J.ESPACE_TX_V3 if "seq" in tx else self.J.ESPACE_TX)
+            # 2) anti-boucle : un même message signé n'est relayé qu'une fois par fenêtre (armure retouchée comprise).
+            cle = self.J.registre_tx(tx)
+            with self.verrou_vus:
+                t0 = time.time()
+                for k in [k for k, t in self.vus.items() if t0 - t > self.limites["vus_ttl_s"]]:
+                    del self.vus[k]
+                if cle in self.vus:
+                    raise self.J.Refus("transaction déjà relayée par ce nœud (anti-boucle)")
+                while len(self.vus) >= self.limites["vus_relais"]:
+                    self.vus.pop(next(iter(self.vus)))
+                self.vus[cle] = t0
         if self.producteur:
             with VERROU:
                 t = self.J.mettre_en_attente(tx)
             noter(f"transaction {t['type']} {t['id'][:12]}… acceptée ({origine})")
             return {"ok": True, "id": t["id"], "statut": "en attente du prochain bloc"}
         derniere = None
-        for p in self.pairs:
+        producteurs = [p for p, x in self.pairs.items() if x.get("role") == "producteur"]
+        for p in (producteurs + [p for p in self.pairs if p not in producteurs])[:3]:    # le producteur d'abord, 3 au plus
             try:
                 r = self.http(p + "/p2p/tx", tx)
                 if r.get("ok"):
                     noter(f"transaction {tx['id'][:12]}… relayée vers {p}")
                     return {"ok": True, "id": tx["id"], "statut": f"relayée vers {p}"}
-                derniere = r.get("erreur")
+                motif = r.get("erreur")
             except urllib.error.HTTPError as e:
                 try:
-                    derniere = json.loads(e.read()).get("erreur")
+                    motif = json.loads(e.read()).get("erreur")
                 except ValueError:
-                    derniere = str(e)
+                    motif = str(e)
+                if p in producteurs:   # le producteur a tranché : relayer ailleurs ne ferait que tourner en rond
+                    raise self.J.Refus(motif or "refusée par le producteur")
             except (OSError, ValueError) as e:
-                derniere = f"{p} injoignable ({e.__class__.__name__})"
+                motif = f"{p} injoignable ({e.__class__.__name__})"
+            derniere = derniere if derniere is not None and "anti-boucle" in str(motif) else motif
         raise self.J.Refus(derniere or "aucun pair joignable")
 
     def depenser(self, unites, service, noeud=None):
@@ -315,45 +419,23 @@ class Noeud:
               "cle": self.pub(self.cle_portefeuille), "horodatage": self.J.maintenant()}
         if noeud:
             tx["noeud"] = noeud
-        self.J.signer_tx(tx, self.cle_portefeuille)
+        bloc0, blocs, _, preuves = self.etat()
+        self.J.signer_pour(tx, self.cle_portefeuille, bloc0, preuves, len(blocs) + 1, self.soumises)
         r = self.recevoir(tx, "portefeuille local")
         self.soumises.append({"id": tx["id"], "type": "depense", "unites": tx["unites"], "service": tx["service"],
-                              "horodatage": tx["horodatage"]})
+                              "horodatage": tx["horodatage"], "cle": tx["cle"], "seq": tx.get("seq")})
         return r
 
-    def acheter(self, unites):
-        if not self.producteur:
-            raise self.J.Refus("achat d'essai : seulement sur le nœud producteur (achat réel fermé)")
-        if not 0 < int(unites) <= 10000:
-            raise self.J.Refus("achat d'essai limité à 10 000 unités par demande")
-        tx = {"type": "achat", "compte": self.adresse(), "unites": int(unites),
-              "facture": "ESSAI-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")}
-        with VERROU:
-            t = self.J.mettre_en_attente(tx)
-        noter(f"achat d'essai {unites} pour {tx['compte'][:12]}… en attente")
-        return {"ok": True, "id": t["id"], "facture": tx["facture"]}
-
-    def acheter_forfait(self, offre):
-        """Forfait d'essai : facture ESSAI-, aucune somme encaissée."""
-        if not self.producteur:
-            raise self.J.Refus("achat de forfait : sur le nœud producteur seulement tant que la vente réelle est fermée")
-        _, blocs, _, _ = self.etat()
-        o = self.J.catalogue_courant(blocs).get(str(offre))
-        if not o:
-            raise self.J.Refus(f"offre inconnue : {offre}")
-        tx = {"type": "forfait", "compte": self.adresse(), "offre": str(offre), "centimes": o["centimes"],
-              "unites": o["unites"], "facture": "ESSAI-FORFAIT-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")}
-        with VERROU:
-            t = self.J.mettre_en_attente(tx)
-        noter(f"forfait d'essai {offre} ({o['centimes'] / 100:.2f} €, {o['unites']} unités) en attente")
-        return {"ok": True, "id": t["id"], "facture": tx["facture"], "unites": o["unites"]}
 
     def tx_inscription(self):
         """Inscription signée par la clé du nœud ; elle rattache le portefeuille de la machine, pour la consultation."""
         pub = self.pub(self.cle_noeud)
         tx = {"type": "inscription", "noeud": self.nom, "cle": pub, "adresse": self.J.adresse(pub),
               "portefeuille": self.adresse(), "horodatage": self.J.maintenant()}
-        return self.J.signer_tx(tx, self.cle_noeud)
+        bloc0, blocs, _, preuves = self.etat()
+        if bloc0 is None:
+            return self.J.signer_tx(tx, self.cle_noeud)
+        return self.J.signer_pour(tx, self.cle_noeud, bloc0, preuves, len(blocs) + 1)
 
     def inscrire(self):
         tx = self.tx_inscription()
@@ -505,7 +587,7 @@ class Noeud:
         return {"adresse": a, "solde": soldes.get("compte:" + a, 0), "historique": list(reversed(hist)),
                 "en_attente": self.soumises[-20:], "services": self.cfg.get("services", []),
                 "catalogue": self.J.catalogue_courant(blocs),
-                "achat_possible": self.producteur, "fichier_cle": str(self.cle_portefeuille)}
+                "fichier_cle": str(self.cle_portefeuille)}
 
     def historique_csv(self):
         """Historique du portefeuille pour un tableur."""
@@ -591,8 +673,13 @@ def fabrique(noeud, local):
     TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
              ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json"}
 
+    hotes_p2p = {a.strip() for a in str(noeud.cfg["p2p"]).split(",")}
+    if noeud.cfg.get("p2p_public"):
+        hotes_p2p.add(urllib.parse.urlsplit(noeud.cfg["p2p_public"]).netloc)
+
     class H(BaseHTTPRequestHandler):
         server_version = f"vision-noeud/{VERSION}"
+        timeout = noeud.limites["delai_socket_s"]       # socket : en-têtes et corps lus en temps borné
 
         def log_message(self, *a):
             pass
@@ -613,14 +700,24 @@ def fabrique(noeud, local):
             self.wfile.write(data)
 
         def corps_json(self):
-            n = int(self.headers.get("Content-Length") or 0)
+            """Refus AVANT toute lecture : longueur absente, négative, non décimale ou trop grande ; puis lecture exacte."""
+            v = self.headers.get("Content-Length")
+            if self.headers.get("Transfer-Encoding") or v is None:
+                raise Trop(411, "Content-Length obligatoire")
+            if not v.isascii() or not v.isdigit():
+                raise Trop(400, "Content-Length invalide")
+            n = int(v)
             if n > MAX_CORPS:
-                raise ValueError("corps trop gros")
-            return json.loads(self.rfile.read(n) or b"{}")
+                raise Trop(413, "corps trop gros")
+            data = self.rfile.read(n)
+            if len(data) != n:
+                raise ValueError("corps tronqué")
+            return json.loads(data or b"{}")
 
         def hote_refuse(self):
             """Rebinding DNS : un site qui se fait passer pour 127.0.0.1 arrive ici avec son propre nom d'hôte."""
-            if local and self.headers.get("Host") != noeud.cfg["api"]:
+            h = self.headers.get("Host")
+            if (local and h != noeud.cfg["api"]) or (not local and h not in hotes_p2p):
                 self.envoyer(403, {"ok": False, "erreur": "hôte refusé"})
                 return True
             return False
@@ -640,8 +737,9 @@ def fabrique(noeud, local):
                                               "hauteur": len(blocs), "bloc0": noeud.cfg["bloc0_empreinte"],
                                               "tete": blocs[-1]["empreinte"] if blocs else None,
                                               "pairs": [p for p, i in noeud.pairs.items() if i.get("vu")],
-                                              "p2p_public": noeud.cfg.get("p2p_public"), "cockpit": noeud.cfg.get("cockpit"),
-                                              "capacite": noeud.capacite()})
+                                              "p2p_public": noeud.cfg.get("p2p_public"),
+                                              "cockpit": noeud.cfg.get("cockpit") if noeud.cfg.get("annoncer_cockpit") else None,
+                                              "capacite": noeud.capacite() if noeud.cfg.get("partager_capacite", True) else None})
                 if u.path == "/p2p/bloc0":
                     return self.envoyer(200, corps=noeud.bloc0_chemin.read_bytes())
                 if u.path == "/p2p/blocs":
@@ -678,19 +776,23 @@ def fabrique(noeud, local):
                 return None
             u = urllib.parse.urlparse(self.path)
             try:
+                # Origin : absent (pair, processus) ou celui de l'API locale ; une page web n'a rien à poster ici.
+                if self.headers.get("Origin") not in ((None, origine_admise) if local else (None,)):
+                    return self.envoyer(403, {"ok": False, "erreur": "origine refusée"})
+                # JSON exigé : une page web ne peut pas l'envoyer en requête « simple » (text/plain) sans contrôle CORS.
+                if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+                    return self.envoyer(415, {"ok": False, "erreur": "Content-Type application/json exigé"})
                 if u.path == "/p2p/tx":
                     return self.envoyer(200, noeud.recevoir(self.corps_json(), f"pair {self.client_address[0]}"))
                 if not local:
                     return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
-                if self.headers.get("Origin") not in (None, origine_admise):
-                    return self.envoyer(403, {"ok": False, "erreur": "origine refusée"})
+                passe = (self.headers.get("X-Vision-Passe") or "").encode("utf-8", "replace")
+                if not hmac.compare_digest(passe, noeud.passe_local.encode()):
+                    self.close_connection = True
+                    return self.envoyer(401, {"ok": False, "erreur": "passe local absent ou faux : ouvrez le portefeuille avec ouvrir-portefeuille"})
                 d = self.corps_json()
                 if u.path == "/api/depenser":
                     return self.envoyer(200, noeud.depenser(d.get("unites"), d.get("service", ""), d.get("noeud")))
-                if u.path == "/api/acheter-forfait":
-                    return self.envoyer(200, noeud.acheter_forfait(d.get("offre")))
-                if u.path == "/api/acheter":
-                    return self.envoyer(200, noeud.acheter(d.get("unites")))
                 if u.path == "/api/inscrire":
                     return self.envoyer(200, noeud.inscrire())
                 if u.path == "/api/demande-inscription":
@@ -701,17 +803,57 @@ def fabrique(noeud, local):
                         noeud.sceller_si_besoin()
                     return self.envoyer(200, {"ok": True})
                 return self.envoyer(404, {"ok": False, "erreur": "inconnu"})
+            except Trop as e:
+                self.close_connection = True
+                return self.envoyer(e.code, {"ok": False, "erreur": str(e)})
             except noeud.J.Refus as e:
                 return self.envoyer(400, {"ok": False, "erreur": str(e)})
-            except (ValueError, TypeError, KeyError) as e:
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
                 return self.envoyer(400, {"ok": False, "erreur": f"requête invalide ({e.__class__.__name__})"})
     return H
 
 
-def ecouter(adresse, handler):
+class Serveur(ThreadingHTTPServer):
+    """Écoute bornée : au plus `max_simultanees` requêtes en cours, et `max_par_pair` par adresse distante.
+    Au-delà, 503 immédiat et fermeture, sans fil ni lecture."""
+    daemon_threads = True
+    request_queue_size = 16
+
+    def __init__(self, adresse, handler, max_simultanees, max_par_pair):
+        super().__init__(adresse, handler)
+        self.places = threading.BoundedSemaphore(max_simultanees)
+        self.max_par_pair, self.par_ip, self.verrou_ip = max_par_pair, {}, threading.Lock()
+
+    def process_request(self, request, client_address):
+        ip = client_address[0]
+        with self.verrou_ip:
+            admis = self.par_ip.get(ip, 0) < self.max_par_pair and self.places.acquire(blocking=False)
+            if admis:
+                self.par_ip[ip] = self.par_ip.get(ip, 0) + 1
+        if not admis:
+            try:
+                request.sendall(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self.verrou_ip:
+                self.par_ip[client_address[0]] -= 1
+                if self.par_ip[client_address[0]] <= 0:
+                    del self.par_ip[client_address[0]]
+            self.places.release()
+
+
+def ecouter(adresse, handler, limites=LIMITES, local=False):
     hote, port = adresse.rsplit(":", 1)
-    s = ThreadingHTTPServer((hote, int(port)), handler)
-    s.daemon_threads = True
+    s = Serveur((hote, int(port)), handler, limites["max_simultanees"],
+                limites["max_simultanees"] if local else limites["max_par_pair"])
     threading.Thread(target=s.serve_forever, daemon=True).start()
     return s
 
@@ -724,9 +866,9 @@ def main():
     if not cfg["api"].startswith("127.0.0.1:"):
         sys.exit("l'API du portefeuille n'écoute que sur 127.0.0.1")
     n = Noeud(cfg)
-    ecouter(cfg["api"], fabrique(n, local=True))
+    ecouter(cfg["api"], fabrique(n, local=True), n.limites, local=True)
     for adr in str(cfg["p2p"]).split(","):
-        ecouter(adr.strip(), fabrique(n, local=False))
+        ecouter(adr.strip(), fabrique(n, local=False), n.limites)
     noter(f"nœud {n.nom} ({cfg['role']}) · portefeuille http://{cfg['api']}/ · pair-à-pair {cfg['p2p']} · "
           f"{len(n.pairs)} pair(s) · adresse {n.adresse()}")
     n.boucle()

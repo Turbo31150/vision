@@ -42,7 +42,7 @@ bash installer-noeud-vision.sh --nom mon-noeud
 
 Ensuite :
 
-1. Le portefeuille s'ouvre sur `http://127.0.0.1:8861/` (ou par l'icône « VISION Portefeuille »). Deux clés ed25519 ont été créées sur votre machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais.
+1. Le portefeuille s'ouvre par l'icône « VISION Portefeuille » ou par la commande affichée à la fin de l'installation ; l'adresse `http://127.0.0.1:8861/` seule donne une lecture sans signature. Deux clés ed25519 ont été créées sur votre machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais.
 2. Le nœud lit la chaîne sur le miroir public et la **rejoue entièrement** depuis le bloc 0, avec la clé du producteur épinglée dans l'installateur. Un miroir ne peut rien lui imposer.
 3. Onglet **Mon compte** : connectez-vous avec une adresse (`te1…`) pour voir ce que la chaîne sait d'elle : solde, forfait d'essai, dépenses, nœuds rattachés, matériel partagé et unités reçues.
 4. Onglet **Nœud** → **Préparer ma demande d'inscription** : une transaction signée par la clé de votre nœud (données publiques seulement) s'ouvre en ticket sur ce dépôt. Le producteur l'importe et votre nœud entre au registre.
@@ -68,7 +68,7 @@ cat docs/installer-noeud-vision.sh.sha256
 ![Un ordinateur qui garde deux clés lumineuses, entouré de blocs](docs/images/noeud-cles.jpg)
 *Illustration générée par IA (Manus).*
 
-**2. Installer : un fichier, deux clés qui ne sortent jamais.** L'installateur crée deux clés ed25519 dans `~/.local/share/vision-noeud`, une pour le nœud et une pour le portefeuille. Le portefeuille n'est servi que sur la machine (`http://127.0.0.1:8861/`) : personne d'autre ne peut l'ouvrir ni signer à votre place.
+**2. Installer : un fichier, deux clés qui ne sortent jamais.** L'installateur crée deux clés ed25519 dans `~/.local/share/vision-noeud`, une pour le nœud et une pour le portefeuille. Le portefeuille n'est servi que sur la machine (`http://127.0.0.1:8861/`) : seul votre compte peut signer, grâce à un secret local lisible par vous seul.
 
 ![Capture de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
 *Capture réelle de l'explorateur.*
@@ -97,13 +97,13 @@ La vérification des reçus de travail s'appuie sur un module privé du producte
 
 - Un seul producteur de blocs (preuve d'autorité). Trois témoins répliquent le grand livre, mais ils tournent pour l'instant sur des machines du même propriétaire.
 - Transport entre nœuds en HTTP simple : les blocs et les transactions sont signés, le transport n'est pas chiffré. Pas de traversée de box (NAT) : hors du réseau local, un nœud lit le miroir public.
-- Pas d'audit indépendant. Une relecture contradictoire a relevé des faiblesses, dont le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Les correctifs sont testés mais pas encore publiés ici. La chaîne publique ne contient à ce jour aucune dépense.
+- Pas d'audit indépendant. Une relecture contradictoire a relevé des faiblesses, dont le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.
 - Compter des secondes de calcul reste une mesure approchée du travail.
 
 ## Feuille de route
 
 - **Fait** : chaîne d'essai signée, nœud et installateur en un fichier, portefeuille de bureau avec connexion par adresse, partage de puissance, règles de récompense par époque, explorateur public, vérificateur indépendant.
-- **Prochain, date à fixer** : première clôture d'époque recalculée par chaque nœud, seulement avec la protection contre le rejeu et des reçus vérifiables par tous.
+- **Prochain, date à fixer** : première clôture d'époque recalculée par chaque nœud, seulement avec des reçus vérifiables par tous.
 - **À construire** : témoins tenus par d'autres propriétaires (points de contrôle au format C2SP et rotation de clé : écrits et testés, pas encore en service), chiffrement du transport, traversée des box, inscription sans intervention manuelle.
 - **Conditionnel** : un usage réel ne s'envisage que si les conditions réglementaires sont réunies et prouvées. D'ici là, rien n'est en vente.
 

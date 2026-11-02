@@ -130,6 +130,7 @@ for i in $(seq 1 30); do
   if python3 -c "import urllib.request,sys; urllib.request.urlopen('http://$API/api/etat', timeout=2)" 2>/dev/null; then
     ADR=$(python3 -c "import json,urllib.request; print(json.load(urllib.request.urlopen('http://$API/api/portefeuille'))['adresse'])")
     dire "nœud prêt · portefeuille http://$API/ · adresse $ADR"
+    dire "pour dépenser ou vous inscrire : $PREFIXE/code/ouvrir-portefeuille $API $PREFIXE (l'adresse seule donne une lecture sans signature)"
     exit 0
   fi
   sleep 1

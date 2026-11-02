@@ -26,6 +26,8 @@ from math import ceil
 CHAINE, FORMAT = "vision-essai", "vision-bloc/1"
 PRODUCTEUR = "m0"
 ESPACE_BLOC, ESPACE_TX, ESPACE_CLE = "vision-bloc", "vision-tx", "vision-cle"
+ESPACE_TX_V3 = ESPACE_TX + "@3"
+HAUTEUR_ANTI_REJEU = 3     # bloc à partir duquel une transaction signée doit porter chaine, bloc0 et seq
 RESERVE = "reserve:usage"
 EPOQUE_0 = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
 SEMAINE = timedelta(days=7)
@@ -83,12 +85,12 @@ def adresse_de(cle):
     return "te1" + h(p)[:40]
 
 
-def signe_par(tx, identite):
+def signe_par(tx, identite, espace=ESPACE_TX):
     p = " ".join(str(tx.get("cle", "")).split()[:2])
     if not PUB.fullmatch(p):
         raise Refus("transaction sans clé publique valide")
     message = forme({k: v for k, v in tx.items() if k not in ("id", "signature")})
-    if not signature_ok(message, tx.get("signature", ""), tx["cle"], identite, ESPACE_TX):
+    if not signature_ok(message, tx.get("signature", ""), tx["cle"], identite, espace):
         raise Refus("signature de transaction invalide")
 
 
@@ -120,6 +122,7 @@ class Registre:
         self.v2 = False
         self.factures, self.etapes, self.noms, self.cles_noeud, self.payes, self.recus_payes = set(), set(), set(), set(), set(), set()
         self.offres = set()
+        self.consommees, self.seqs, self.espace = set(), set(), ESPACE_TX
         self.conso = {}
         self.epoques, self.premiere = [], 0
 
@@ -141,7 +144,28 @@ class Registre:
             raise Refus(f"facture déjà convertie : {f}")
         self.factures.add(f)
 
-    def appliquer(self, tx):
+    def controler_v3(self, tx, hauteur):
+        """Format signé v3 : liée à cette chaîne, séquence stricte par signataire, échéance facultative."""
+        n = tx.get("seq")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+            raise Refus("format signé v3 exigé : seq absent ou invalide")
+        if tx.get("chaine") != CHAINE or tx.get("bloc0") != self.bloc0["empreinte"]:
+            raise Refus("transaction signée pour une autre chaîne")
+        fin = tx.get("valide_jusqu_a")
+        if fin is not None and (not isinstance(fin, int) or isinstance(fin, bool) or hauteur > fin):
+            raise Refus("transaction expirée")
+        a = adresse_de(tx.get("cle", ""))
+        if (a, n) in self.seqs or (n > 1 and (a, n - 1) not in self.seqs):
+            raise Refus("séquence hors ordre")
+        return a, n
+
+    def appliquer(self, tx, hauteur=None):
+        message = h(forme({k: v for k, v in tx.items() if k not in ("id", "signature")}))
+        if message in self.consommees:
+            raise Refus("rejeu : transaction déjà scellée")
+        v3 = "signature" in tx and HAUTEUR_ANTI_REJEU is not None and hauteur is not None and hauteur >= HAUTEUR_ANTI_REJEU
+        self.espace = ESPACE_TX_V3 if v3 else ESPACE_TX
+        seq = self.controler_v3(tx, hauteur) if v3 else None
         t = tx.get("type")
         faire = getattr(self, "t_" + str(t), None)
         if faire is None:
@@ -153,6 +177,9 @@ class Registre:
         faire(tx)
         if sum(self.soldes.values()) != self.offre:
             raise Refus("offre non conservée")
+        self.consommees.add(message)
+        if seq:
+            self.seqs.add(seq)
 
     def t_allocation(self, tx):
         if self.soldes:
@@ -179,7 +206,7 @@ class Registre:
         if ADRESSE.fullmatch(c):
             if adresse_de(tx.get("cle", "")) != c:
                 raise Refus("clé sans rapport avec l'adresse")
-            signe_par(tx, c)
+            signe_par(tx, c, self.espace)
         elif tx.get("signature"):
             raise Refus("signature inattendue sur un compte géré")
         s = tx.get("service")
@@ -209,7 +236,7 @@ class Registre:
         nom(tx.get("noeud"), "nœud")
         if tx.get("adresse") != adresse_de(tx.get("cle", "")):
             raise Refus("adresse sans rapport avec la clé")
-        signe_par(tx, tx["noeud"])
+        signe_par(tx, tx["noeud"], self.espace)
         if tx["noeud"] in self.noms or tx["adresse"] in self.cles_noeud:
             raise Refus("inscription en double")
         self.noms.add(tx["noeud"])
@@ -328,7 +355,7 @@ def rejouer(bloc0, blocs, cle):
             if i == 1 and [tx.get("type") for tx in txs] != ["allocation"]:
                 raise Refus("le bloc 1 ne contient que l'allocation")
             for tx in txs:
-                r.appliquer(tx)
+                r.appliquer(tx, i)
                 ntx += 1
             if b.get("soldes") != h(forme(r.soldes)) or b.get("detruit") != r.soldes.get("detruit", 0):
                 raise Refus("état des soldes différent du rejeu")

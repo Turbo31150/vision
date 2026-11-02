@@ -22,8 +22,18 @@
   const court = (h, n = 12) => (h ? `${h.slice(0, n)}…` : '—');
   const heure = (iso) => { try { return new Date(iso).toLocaleString('fr-FR'); } catch { return iso || ''; } };
 
+  // Le passe local arrive par le fragment de l'adresse, qui n'est jamais envoyé au serveur, puis quitte aussitôt la barre d'adresse.
+  const passe = (() => {
+    const m = /^#passe=([\w-]+)$/.exec(location.hash);
+    try {
+      if (m) { sessionStorage.setItem('vision-passe', m[1]); history.replaceState(null, '', location.pathname); }
+      return sessionStorage.getItem('vision-passe') || '';
+    } catch (_) { return m ? m[1] : ''; }
+  })();
+  if (!passe) addEventListener('DOMContentLoaded', () => message('message', 'Lecture seule : pour dépenser ou vous inscrire, ouvrez le portefeuille par son icône ou par la commande ouvrir-portefeuille.', false));
+
   async function api(chemin, corps) {
-    const r = await fetch(chemin, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) } : {});
+    const r = await fetch(chemin, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Vision-Passe': passe }, body: JSON.stringify(corps) } : {});
     const d = await r.json().catch(() => ({}));
     if (!r.ok || d.ok === false) throw new Error(d.erreur || `HTTP ${r.status}`);
     return d;
@@ -110,8 +120,6 @@
     $('solde').textContent = fr.format(p.solde);
     $('adresse').textContent = p.adresse;
     $('fichier-cle').textContent = p.fichier_cle || '—';
-    $('btn-acheter').disabled = !p.achat_possible;
-    $('btn-acheter').title = p.achat_possible ? 'Forfaits d’essai, aucune somme encaissée' : 'Achat de forfait possible seulement sur le nœud producteur tant que la vente réelle est fermée';
     vider($('attente'), p.en_attente.length ? tableau([['Type', (t) => t.type], ['Unités', (t) => t.unites ?? '', 'num'],
       ['Service', (t) => t.service || ''], ['Id', (t) => el('code', {}, court(t.id, 10))]], p.en_attente) : el('div', { class: 'vide' }, 'Rien en attente.'));
     vider($('historique'), tableau([['Bloc', (t) => `#${t.hauteur}`], ['Quand', (t) => heure(t.horodatage)], ['Type', (t) => TYPES[t.type] || t.type],
@@ -178,28 +186,6 @@
     vider(f, el('label', {}, 'Service du catalogue (barème d’essai, non décidé)'), sel, barre, leg,
       el('div', { class: 'actions' }, ok, el('button', { onclick: () => { f.hidden = true; } }, 'Annuler')));
     maj(); f.hidden = false;
-  }
-
-  function formulaireAchat() {
-    const f = $('formulaire'), cat = Object.entries(donnees.portefeuille.catalogue || {});
-    if (!cat.length) { vider(f, el('p', { class: 'note' }, 'Aucun catalogue de forfaits publié sur la chaîne.')); f.hidden = false; return; }
-    const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-    const choix = el('div', { class: 'forfaits' }, cat.map(([id, o], i) => el('label', { class: 'forfait' },
-      el('input', { type: 'radio', name: 'offre', value: id, ...(i === 1 ? { checked: 'checked' } : {}) }),
-      el('span', { class: 'forfait-tete' }, el('b', {}, o.libelle || id), el('span', { class: 'prix' }, eur.format(o.centimes / 100))),
-      el('span', { class: 'forfait-unites' }, `${fr.format(o.unites)} unités d’usage`),
-      el('span', { class: 'note' }, o.contenu || ''))));
-    const ok = el('button', { class: 'primaire', onclick: async () => {
-      const offre = (f.querySelector('input[name=offre]:checked') || {}).value; if (!offre) return;
-      ok.disabled = true;
-      try { const r = await api('/api/acheter-forfait', { offre });
-        message('message', `Forfait d’essai enregistré (facture ${r.facture}) : ${fr.format(r.unites)} unités créditées au prochain bloc. Aucune somme encaissée.`, true);
-        f.hidden = true; rafraichir();
-      } catch (e) { message('message', `Refusé : ${e.message}`, false); } finally { ok.disabled = false; }
-    } }, 'Acheter ce forfait (essai)');
-    vider(f, el('label', {}, 'Forfaits d’essai : aucune somme encaissée'),
-      choix, el('div', { class: 'actions' }, ok, el('button', { onclick: () => { f.hidden = true; } }, 'Annuler')));
-    f.hidden = false;
   }
 
   function recevoir() {
@@ -289,7 +275,6 @@
     document.querySelectorAll('.vue').forEach((v) => v.classList.toggle('actif', v.id === `vue-${vue}`));
   }));
   $('btn-depenser').addEventListener('click', formulaireDepense);
-  $('btn-acheter').addEventListener('click', formulaireAchat);
   $('btn-recevoir').addEventListener('click', recevoir);
   $('copier').addEventListener('click', () => navigator.clipboard?.writeText($('adresse').textContent));
   $('btn-inscrire').addEventListener('click', async () => {

@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # Ouvre le portefeuille du nœud dans une fenêtre d'application (profil de navigateur séparé), sinon dans le navigateur.
+# Le passe local transite par un fichier privé : sur une ligne de commande, les autres comptes de la machine pourraient le lire.
 API=${1:-127.0.0.1:8861}; PREFIXE=${2:-$HOME/.local/share/vision-noeud}
+umask 077
+PASSE=$(cat "$PREFIXE/cles/passe-local" 2>/dev/null)
+ENTREE=$(mktemp "$PREFIXE/.ouvrir-XXXXXX.html")
+printf '<!doctype html><meta charset="utf-8"><script>location.replace("http://%s/#passe=%s")</script>\n' "$API" "$PASSE" > "$ENTREE"
+( sleep 20; rm -f "$ENTREE" ) >/dev/null 2>&1 </dev/null &
 for b in google-chrome chromium chromium-browser brave-browser microsoft-edge; do
   if command -v "$b" >/dev/null; then
-    exec "$b" --app="http://$API/" --user-data-dir="$PREFIXE/navigateur" --window-size=1280,860 --no-first-run
+    exec "$b" --app="file://$ENTREE" --user-data-dir="$PREFIXE/navigateur" --window-size=1280,860 --no-first-run
   fi
 done
-exec xdg-open "http://$API/"
+exec xdg-open "file://$ENTREE"

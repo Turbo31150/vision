@@ -22,7 +22,6 @@ ESSAI : unités sans valeur, rien n'est vendu ni offert au public.
   vision-chaine init                         genèse d'essai (bloc 1), une seule fois
   vision-chaine acheter  --compte C --unites N --facture ESSAI-… [--euros E]
   vision-chaine depenser --compte C --unites N --service S [--noeud M]
-  vision-chaine recompenser                  récompenses des étapes VISION validées, pas encore payées
   vision-chaine sceller                      transactions en attente → bloc signé
   vision-chaine verifier | soldes | etat | exporter [--sortie F]
   vision-chaine collecter                    fait cosigner la tête par les témoins (ssh)
@@ -212,6 +211,14 @@ def ajouter_jsonl(f, x):
 
 
 ESPACE_TX = "vision-tx"
+ESPACE_TX_V3 = ESPACE_TX + "@3"     # domaine du format anti-rejeu : une signature v1 ne vaut jamais en v3, ni l'inverse
+# ── Anti-rejeu : règle de CONSENSUS, identique sur tous les nœuds ──────────────────────────────
+#   * registre des transactions consommées, actif dès le bloc 1 :
+#     preuve « tx:<sha256 du message signé> ». Le message exclut `id` et `signature` : une armure de signature
+#     retouchée (saut de ligne final, CRLF) garde sa validité mais ne donne PAS un second passage ;
+#   * à partir de HAUTEUR_ANTI_REJEU, toute transaction signée porte `chaine`, `bloc0` et `seq` (compteur par
+#     signataire : 1, 2, 3… sans trou ni réutilisation) et se signe dans ESPACE_TX_V3 ; `valide_jusqu_a` facultatif.
+HAUTEUR_ANTI_REJEU = 3
 ADRESSE = re.compile(r"te1[0-9a-f]{40}")
 PUB = re.compile(r"ssh-ed25519 [A-Za-z0-9+/=]{60,80}")
 
@@ -228,18 +235,60 @@ def message_tx(tx):
     return canon({k: v for k, v in tx.items() if k not in ("id", "signature")})
 
 
-def signer_tx(tx, cle):
+def signer_tx(tx, cle, espace=ESPACE_TX):
     """Signe une transaction avec la clé d'un portefeuille ou d'un nœud. La clé privée reste où elle est."""
-    tx["signature"] = signer(message_tx(tx), cle, ESPACE_TX)
+    tx["signature"] = signer(message_tx(tx), cle, espace)
     tx["id"] = id_tx(tx)
     return tx
 
 
-def controler_signature(tx, identite):
+def controler_signature(tx, identite, espace=ESPACE_TX):
     if not PUB.fullmatch(" ".join(str(tx.get("cle", "")).split()[:2])):
         raise Refus("transaction signée sans clé publique valide")
-    if not verifier_sig(message_tx(tx), tx.get("signature", ""), tx["cle"], identite, ESPACE_TX):
+    if not verifier_sig(message_tx(tx), tx.get("signature", ""), tx["cle"], identite, espace):
         raise Refus("signature de la transaction invalide")
+
+
+def registre_tx(tx):
+    """Registre des transactions consommées : empreinte du MESSAGE signé (sans `id` ni `signature`)."""
+    return "tx:" + sha(message_tx(tx))
+
+
+def v3_active(hauteur):
+    return HAUTEUR_ANTI_REJEU is not None and hauteur is not None and hauteur >= HAUTEUR_ANTI_REJEU
+
+
+def controler_v3(tx, bloc0, preuves, hauteur):
+    """Format signé v3 : liée à CETTE chaîne, séquence stricte par signataire, échéance facultative."""
+    n = tx.get("seq")
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise Refus(f"format signé v3 exigé depuis le bloc {HAUTEUR_ANTI_REJEU} : seq absent ou invalide")
+    if tx.get("chaine") != CHAINE or tx.get("bloc0") != bloc0["empreinte"]:
+        raise Refus("transaction signée pour une autre chaîne (chaine ou bloc0 différent)")
+    fin = tx.get("valide_jusqu_a")
+    if fin is not None and (not isinstance(fin, int) or isinstance(fin, bool) or hauteur > fin):
+        raise Refus(f"transaction expirée (valide jusqu'au bloc {fin!r})")
+    a = adresse(tx.get("cle", ""))
+    if f"seq:{a}:{n}" in preuves or (n > 1 and f"seq:{a}:{n - 1}" not in preuves):
+        raise Refus(f"séquence {n} hors ordre pour {a[:14]}…")
+    return f"seq:{a}:{n}"
+
+
+def prochain_seq(preuves, pub, en_attente=()):
+    a, n = adresse(pub), 1
+    while f"seq:{a}:{n}" in preuves:
+        n += 1
+    autres = [t["seq"] for t in en_attente if isinstance(t.get("seq"), int)
+              and " ".join(str(t.get("cle", "")).split()[:2]) == " ".join(pub.split()[:2])]
+    return max([n] + [x + 1 for x in autres])
+
+
+def signer_pour(tx, cle, bloc0, preuves, hauteur, en_attente=()):
+    """Signe au format en vigueur pour le bloc `hauteur` qui la scellera (v1 avant l'activation, v3 ensuite)."""
+    if v3_active(hauteur):
+        tx.update(chaine=CHAINE, bloc0=bloc0["empreinte"], seq=prochain_seq(preuves, pub_de(cle), en_attente))
+        return signer_tx(tx, cle, ESPACE_TX_V3)
+    return signer_tx(tx, cle)
 
 
 def charger_bloc0(chemin=None):
@@ -253,10 +302,17 @@ def charger_bloc0(chemin=None):
     return b0
 
 
-def appliquer(soldes, tx, bloc0, preuves, gele=False):
-    """Applique une transaction aux soldes (dict modifié) ou lève Refus. Les règles du bloc 0 sont ici."""
+def appliquer(soldes, tx, bloc0, preuves, gele=False, hauteur=None):
+    """Applique une transaction aux soldes (dict modifié) ou lève Refus. Les règles du bloc 0 sont ici.
+    `hauteur` = bloc qui contient (ou contiendra) la transaction : il fixe le format signé exigé."""
     t, n = tx.get("type"), tx.get("unites")
     v2 = "regles:2" in preuves
+    cle_reg = registre_tx(tx)
+    if cle_reg in preuves:
+        raise Refus("rejeu refusé : transaction déjà scellée ou déjà en attente")
+    v3 = "signature" in tx and v3_active(hauteur)
+    espace = ESPACE_TX_V3 if v3 else ESPACE_TX
+    cle_seq = controler_v3(tx, bloc0, preuves, hauteur) if v3 else None
     if t not in ("allocation", "inscription", "regles", "epoque", "catalogue", "cle_producteur") and (
             not isinstance(n, int) or isinstance(n, bool) or n <= 0 or n > bloc0["offre_totale"]):
         raise Refus(f"{t} : unités invalides ({n!r})")
@@ -300,7 +356,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
             # compte de portefeuille : seule la clé qui donne cette adresse peut dépenser
             if adresse(tx.get("cle", "")) != tx["compte"]:
                 raise Refus("la clé ne correspond pas à l'adresse du compte")
-            controler_signature(tx, tx["compte"])
+            controler_signature(tx, tx["compte"], espace)
         elif tx.get("signature"):
             raise Refus("compte géré par le producteur : signature inattendue")
         if not isinstance(tx.get("service"), str) or not 0 < len(tx["service"]) <= 120:
@@ -331,7 +387,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
         nom(tx.get("noeud"), "nœud")
         if tx.get("adresse") != adresse(tx.get("cle", "")):
             raise Refus("inscription : adresse différente de celle de la clé")
-        controler_signature(tx, tx["noeud"])
+        controler_signature(tx, tx["noeud"], espace)
         for cle_registre in ("inscrit:" + tx["noeud"], "cle:" + tx["adresse"]):
             if cle_registre in preuves:
                 raise Refus(f"inscription en double ({cle_registre.split(':')[0]} déjà pris)")
@@ -426,6 +482,9 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False):
         raise Refus(f"type de transaction inconnu : {t!r} (aucune frappe, aucun transfert)")
     if sum(soldes.values()) != bloc0["offre_totale"]:
         raise Refus("conservation violée : soldes + détruit ≠ offre totale")
+    preuves.add(cle_reg)
+    if cle_seq:
+        preuves.add(cle_seq)
 
 
 def message_cle(ancienne, nouvelle, horodatage):
@@ -445,8 +504,14 @@ def controler_cle(tx, ancienne, i):
 
 def rejouer(blocs, bloc0, pub, verifier_signatures=True):
     """Vérifie toute la chaîne depuis la clé du bloc 1. Renvoie (soldes, preuves). Lève Refus au premier écart."""
-    soldes, preuves, prec = {}, set(), bloc0["empreinte"]
-    for i, b in enumerate(blocs, start=1):
+    soldes, preuves, _, _ = _rejouer(blocs, bloc0, pub, verifier_signatures, 0, {}, set(), bloc0["empreinte"])
+    return soldes, preuves
+
+
+def _rejouer(blocs, bloc0, pub, verifier_signatures, i0, soldes, preuves, prec):
+    """Rejoue blocs[i0:] à partir d'un état DÉJÀ vérifié (soldes, preuves, clé courante, empreinte du bloc i0).
+    Mêmes contrôles que le rejeu complet ; renvoie (soldes, preuves, clé courante, empreinte de tête)."""
+    for i, b in enumerate(blocs[i0:], start=i0 + 1):
         if b.get("chaine") != CHAINE or b.get("version_format") != FORMAT:
             raise Refus(f"bloc {i} : chaîne ou format inconnu")
         if b.get("hauteur") != i:
@@ -465,7 +530,7 @@ def rejouer(blocs, bloc0, pub, verifier_signatures=True):
             raise Refus("bloc 1 : la genèse d'essai ne contient que l'allocation")
         for tx in txs:
             try:
-                appliquer(soldes, tx, bloc0, preuves)
+                appliquer(soldes, tx, bloc0, preuves, hauteur=i)
             except Refus as e:
                 raise Refus(f"bloc {i} : {e}")
         if b.get("soldes") != sha(canon(soldes)):
@@ -479,7 +544,7 @@ def rejouer(blocs, bloc0, pub, verifier_signatures=True):
                 if tx.get("type") == "cle_producteur":
                     pub = controler_cle(tx, pub, i)
         prec = b["empreinte"]
-    return soldes, preuves
+    return soldes, preuves, pub, prec
 
 
 # ── producteur (m0) ─────────────────────────────────────────────────────────────────────────────────
@@ -502,11 +567,32 @@ def pub_courante(blocs):
     return pub
 
 
+_VERIFIE = {}   # (dossier, bloc0, clé de genèse) → (k, sha256 des k premières lignes, soldes, preuves, clé, tête)
+
+
 def etat_courant():
+    """État vérifié. Les k premières lignes déjà vérifiées OCTET POUR OCTET ne sont pas revérifiées ; tout le reste
+    (blocs ajoutés) passe par exactement les mêmes contrôles. Une ligne ancienne modifiée annule le cache."""
     bloc0 = charger_bloc0()
-    blocs = lire_jsonl(DOSSIER / F_BLOCS)
-    soldes, preuves = rejouer(blocs, bloc0, pub_genese())
-    return bloc0, blocs, soldes, preuves
+    f = DOSSIER / F_BLOCS
+    lignes = [l for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
+    blocs = [json.loads(l) for l in lignes]
+    g = pub_genese()
+    cle = (str(DOSSIER), bloc0["empreinte"], g)
+    c = _VERIFIE.get(cle)
+    if c and c[0] <= len(lignes) and c[1] == sha("\n".join(lignes[:c[0]])):
+        r = _rejouer(blocs, bloc0, c[4], True, c[0], dict(c[2]), set(c[3]), c[5])
+    else:
+        r = _rejouer(blocs, bloc0, g, True, 0, {}, set(), bloc0["empreinte"])
+    _VERIFIE[cle] = (len(lignes), sha("\n".join(lignes)), dict(r[0]), set(r[1]), r[2], r[3])
+    return bloc0, blocs, r[0], r[1]
+
+
+def verifier_suite(nouveaux):
+    """Vérifie des blocs qui prolongent la chaîne locale à partir de son état vérifié (pas de rejeu complet)."""
+    bloc0, blocs, soldes, preuves = etat_courant()
+    c = _VERIFIE[(str(DOSSIER), bloc0["empreinte"], pub_genese())]
+    _rejouer(blocs + list(nouveaux), bloc0, c[4], True, len(blocs), dict(soldes), set(preuves), c[5])
 
 
 def produire(txs, bloc0, blocs, soldes, preuves):
@@ -516,7 +602,9 @@ def produire(txs, bloc0, blocs, soldes, preuves):
         tx["id"] = id_tx(tx)
     s, p = dict(soldes), set(preuves)
     for tx in txs:
-        appliquer(s, tx, bloc0, p)
+        appliquer(s, tx, bloc0, p, hauteur=len(blocs) + 1)
+        if tx.get("type") == "cle_producteur":   # même contrôle qu'au rejeu, AVANT de signer le bloc
+            controler_cle(tx, pub_courante(blocs), len(blocs) + 1)
     b = {"chaine": CHAINE, "version_format": FORMAT, "hauteur": len(blocs) + 1,
          "precedent": blocs[-1]["empreinte"] if blocs else bloc0["empreinte"], "bloc0": bloc0["empreinte"],
          "horodatage": maintenant(), "producteur": PRODUCTEUR, "transactions": txs,
@@ -541,15 +629,17 @@ def mettre_en_attente(tx):
     if not blocs:
         raise Refus("pas de genèse d'essai : lancer `vision-chaine init`")
     attente = lire_jsonl(DOSSIER / F_ATTENTE)
-    s, p = dict(soldes), set(preuves)
+    s, p, h = dict(soldes), set(preuves), len(blocs) + 1
     for x in attente:
-        appliquer(s, x, bloc0, p)
+        appliquer(s, x, bloc0, p, hauteur=h)
     if "signature" not in tx:    # une transaction signée garde l'horodatage choisi par son signataire
         tx["horodatage"] = maintenant()
     tx["id"] = id_tx(tx)
     if any(x.get("id") == tx["id"] for x in attente):
         raise Refus("transaction déjà en attente")
-    appliquer(s, tx, bloc0, p)   # refuse tout de suite ce qui ne passerait pas au scellement
+    appliquer(s, tx, bloc0, p, hauteur=h)   # refuse tout de suite ce qui ne passerait pas au scellement
+    if tx.get("type") == "cle_producteur":
+        controler_cle(tx, pub_courante(blocs), h)
     ajouter_jsonl(DOSSIER / F_ATTENTE, tx)
     return tx
 
@@ -790,26 +880,11 @@ def cmd_epoque(a):
 
 
 def etat_avec_attente():
-    bloc0, _, soldes, preuves = etat_courant()
+    bloc0, blocs, soldes, preuves = etat_courant()
     s, p = dict(soldes), set(preuves)
     for x in lire_jsonl(DOSSIER / F_ATTENTE):
-        appliquer(s, x, bloc0, p)
+        appliquer(s, x, bloc0, p, hauteur=len(blocs) + 1)
     return s, p
-
-
-def cmd_recompenser(a):
-    bloc0, blocs, soldes, preuves = etat_courant()
-    deja = preuves | {x.get("preuve") for x in lire_jsonl(DOSSIER / F_ATTENTE)}
-    n = 0
-    for e in etapes_validees():
-        if e["preuve"] in deja:
-            continue
-        u = max(1, math.ceil(e["duree_ms"] / 1000)) * TAUX_SECONDE
-        mettre_en_attente({"type": "recompense", "noeud": e["noeud"], "unites": u, "preuve": e["preuve"],
-                           "mission": e["mission"], "etape": e["etape"], "voie": e["voie"]})
-        n += 1
-        print(f"récompense en attente : {u} VISION-essai → noeud:{e['noeud']} ({e['mission']} / {e['etape']}, voie {e['voie']})")
-    print(f"{n} étape(s) validée(s) à récompenser")
 
 
 def cmd_sceller(a):
@@ -994,7 +1069,7 @@ def main():
     x = s.add_parser("epoque")
     x.add_argument("--numero", type=int)
     x.add_argument("--clore", action="store_true")
-    for c in ("recompenser", "sceller", "verifier", "etat", "soldes", "collecter"):
+    for c in ("sceller", "verifier", "etat", "soldes", "collecter"):
         s.add_parser(c)
     x = s.add_parser("exporter")
     x.add_argument("--sortie")

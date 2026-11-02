@@ -91,7 +91,7 @@
           <div class="pas-texte">
             <h3>Installer : un fichier, deux clés qui ne sortent jamais</h3>
             <p>L'installateur est un script shell suivi d'une archive du code de ce dépôt. Il s'installe dans votre dossier personnel, sans droits d'administrateur, et crée deux clés ed25519 : une pour le nœud, une pour le portefeuille. Elles restent dans <code>~/.local/share/vision-noeud</code>.</p>
-            <p>Le portefeuille n'est servi que sur la machine elle-même, à l'adresse <code>http://127.0.0.1:8861/</code>. Personne d'autre ne peut l'ouvrir ni signer à votre place.</p>
+            <p>Le portefeuille n'est servi que sur la machine elle-même, à l'adresse <code>http://127.0.0.1:8861/</code>. Seul votre compte peut signer : un secret local, lisible par vous seul, est exigé, et l'adresse seule donne une lecture.</p>
           </div>
         </li>
         <li>
@@ -205,6 +205,7 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
             <li>Un installateur en un fichier, deux clés créées sur la machine, le rejeu complet de la chaîne.</li>
             <li>Des pairs sur le réseau local, et un miroir public pour les nœuds qui viennent de l'extérieur.</li>
             <li>La connexion au portefeuille par adresse, la demande d'inscription déposée en ticket.</li>
+            <li>Une protection contre le rejeu : chaque dépense est liée à cette chaîne et numérotée, et ne passe qu'une fois.</li>
             <li>Un vérificateur indépendant qui rejoue la chaîne sans le code du nœud, et cet explorateur.</li>
           </ul>
           <p class="preuve"><a href="https://github.com/Turbo31150/vision">Lire le code</a></p>
@@ -215,7 +216,7 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
           <ul>
             <li>Le budget de la semaine se partage entre les nœuds au prorata du travail vérifié et des vérifications signées.</li>
             <li>Chaque nœud recalcule la clôture et refuse un résultat qui ne correspond pas.</li>
-            <li>Elle n'aura lieu qu'avec la protection contre le rejeu et des reçus vérifiables par tous. D'ici là, les récompenses restent calculées en simulation.</li>
+            <li>Elle n'aura lieu qu'avec des reçus vérifiables par tous. D'ici là, les récompenses restent calculées en simulation.</li>
           </ul>
         </li>
         <li class="prochain">
@@ -223,7 +224,6 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
           <h3>Un réseau ouvert</h3>
           <ul>
             <li>Des témoins tenus par d'autres propriétaires, pour que la machine principale ne soit plus seule à faire foi. Les points de contrôle au format standard C2SP et la rotation de la clé d'un témoin sont écrits et testés, mais pas encore en service.</li>
-            <li>Une protection contre le rejeu d'une transaction déjà scellée : écrite et testée, pas encore publiée dans ce dépôt.</li>
             <li>Le chiffrement du transport entre nœuds, et la traversée des box internet.</li>
             <li>Un miroir découpé pour les longues chaînes, et une alerte quand une copie vieillit.</li>
             <li>L'inscription des nœuds sans intervention manuelle.</li>
@@ -252,7 +252,7 @@ curl -LO https://turbo31150.github.io/vision/installer-noeud-vision.sh.sha256
 sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
         <li>Lisez-le : c'est un script shell suivi d'une archive du code de ce dépôt. Puis lancez-le.
 <pre>bash installer-noeud-vision.sh --nom mon-noeud</pre></li>
-        <li>Ouvrez le portefeuille sur <code>http://127.0.0.1:8861/</code>, ou par l'icône « VISION Portefeuille » du menu. Le nœud lit la chaîne sur ce site et la rejoue.</li>
+        <li>Ouvrez le portefeuille par l'icône « VISION Portefeuille » du menu, ou par la commande affichée à la fin de l'installation. L'adresse <code>http://127.0.0.1:8861/</code> seule donne une lecture sans signature. Le nœud lit la chaîne sur ce site et la rejoue.</li>
         <li>Dans l'onglet Nœud, préparez votre demande d'inscription. La transaction, signée par la clé de votre nœud, ne contient que des données publiques et s'ouvre en ticket sur le dépôt. Une fois importée par le producteur, votre nœud entre au registre, rattaché à votre portefeuille.</li>
       </ol>
       <p class="vide">Pour retirer le nœud : <code>bash installer-noeud-vision.sh --desinstaller</code>. Vos clés restent dans <code>~/.local/share/vision-noeud</code>.</p>
@@ -274,7 +274,7 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
         <ul class="sobre">
           <li><b>Un seul producteur.</b> La machine principale signe tous les blocs ; il n'y a pas encore de consensus distribué.</li>
           <li><b>Un transport en clair.</b> Les blocs et les transactions sont signés, mais les échanges entre nœuds ne sont pas chiffrés.</li>
-          <li><b>Pas d'audit indépendant.</b> Une relecture contradictoire a relevé des faiblesses : le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Les correctifs sont testés mais pas encore publiés ici. La chaîne publique ne contient à ce jour aucune dépense.</li>
+          <li><b>Pas d'audit indépendant.</b> Une relecture contradictoire a relevé des faiblesses : le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.</li>
           <li><b>Une mesure approchée.</b> Compter des secondes de calcul reste une mesure approchée du travail. Les critiques sont bienvenues, en ticket sur le dépôt.</li>
         </ul>
       </div>
