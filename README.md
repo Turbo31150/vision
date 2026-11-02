@@ -19,6 +19,7 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 **En bref**
 - **Un nœud en un fichier**, sans droits d'administrateur ; deux clés ed25519 créées et gardées sur la machine ; le logiciel ne les transmet jamais.
 - **Un portefeuille de bureau**, servi uniquement sur la machine (`127.0.0.1`), avec connexion par adresse.
+- **Un assistant dans le portefeuille**, qui ne cite que les chiffres mesurés par le nœud ; il peut se connecter à un parc de machines **par le nœud lui-même** : chaque question est signée par le portefeuille, sans compte à créer ([détails](#lassistant-et-la-connexion-par-le-nœud)).
 - **Une chaîne signée, rejouée par chaque nœud** depuis le bloc 0 ; un vérificateur indépendant la rejoue sans le code du nœud.
 - **La puissance mise en commun** : chaque machine annonce ses cartes, sa mémoire et sa charge ; les annonces sont signées puis additionnées. C'est une puissance déclarée : aucune attestation matérielle n'est encore en place.
 - **Des points sur preuve, en simulation** : un travail ne compte qu'avec le reçu signé d'une autre machine. Aucune récompense n'est émise : le budget est fictif, non convertible et ne donne droit à aucun paiement.
@@ -31,7 +32,8 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | Dossier | Rôle |
 |---|---|
 | `noeud/vision-noeud` | Le nœud : rejoue et vérifie la chaîne, échange avec ses pairs, lit le miroir public, sert le portefeuille sur `127.0.0.1` |
-| `noeud/ui/` | Le portefeuille de bureau : solde, dépenses signées, compte par adresse, partage de puissance, réseau, blocs |
+| `noeud/ui/` | Le portefeuille de bureau : solde, dépenses signées, compte par adresse, partage de puissance, réseau, blocs, assistant |
+| `outils/porte-vision` | La porte d'un parc : reçoit les questions signées des assistants des nœuds et ne transmet que la demande de réponse à son moteur |
 | `chaine/vision-chaine` | Les règles de la chaîne : blocs signés, racines de Merkle, soldes, dépenses (20 % détruits), forfaits, époques de récompense |
 | `installateur/` | Les modèles des installateurs (bash : Linux, macOS, Android ; PowerShell : Windows) et leur constructeur reproductible |
 | `outils/exporter-chaine-publique` | Ce que le nœud producteur publie dans `docs/chaine/` (le miroir) |
@@ -57,7 +59,8 @@ Un nœud et son portefeuille de bureau s'installent dans le dossier de l'utilisa
 | Système | État |
 |---|---|
 | Linux | testé le 2 novembre 2026 (installation, lecture du miroir, chaîne rejouée) |
-| Windows 10 et 11 | non testé sur ce système |
+| Windows 11 | testé le 2 novembre 2026 sur un Windows 11 Famille (Python 3.13, OpenSSH 9.5) : installation, signature, nœud lancé par la tâche planifiée, chaîne rejouée depuis le miroir. Corrigé à cette occasion : la vérification d'une signature fausse, qui bloquait |
+| Windows 10 | non testé sur ce système |
 | macOS | non testé sur ce système |
 | Android (Termux) | non testé sur un téléphone |
 
@@ -153,6 +156,46 @@ cat docs/installer-noeud-vision.sh.sha256 docs/installer-noeud-vision.ps1.sha256
 
 La vérification des reçus de travail s'appuie sur un module privé du producteur, qui n'est pas publié ici. Sans lui, un nœud vérifie tout le reste : liens, racines, signatures, soldes, règles et clôtures d'époque.
 
+## L'assistant et la connexion par le nœud
+
+L'onglet **Assistant** du portefeuille pose une question à un modèle d'IA, sous des règles tenues par le programme et non par le modèle :
+
+- **Fiche mesurée** : avant chaque question, le nœud bâtit une fiche (hauteur de la chaîne, synchronisation, nœuds actifs et leurs cartes, solde, derniers mouvements). Le modèle ne cite qu'elle ; ce qui n'y figure pas s'écrit « non vérifié ».
+- **Aucun outil** : l'assistant ne lit aucun fichier et ne lance aucune commande.
+- **Réponse coupée** : si la limite de jetons coupe la réponse, le nœud la relance une fois, puis la marque « coupée ».
+- **Passe local** : `POST /api/assistant` exige le passe local du portefeuille, comme les dépenses.
+- **Unités d'essai** : sur demande, une question se règle par une dépense signée (1 unité par défaut).
+
+Le moteur est fixé par le propriétaire du nœud dans `config.json`, jamais par la requête :
+
+```json
+"assistant": {"url": "http://127.0.0.1:18652/v1", "modele": "nom-du-modele", "passerelle": true, "cout": 1, "max_jetons": 900}
+```
+
+- **`passerelle: false`** : le nœud parle directement à un moteur compatible OpenAI (`/v1/chat/completions`), par exemple un modèle local.
+- **`passerelle: true`** (connexion par le nœud) : chaque demande porte la clé publique du portefeuille, un horodatage et une signature `ssh-keygen -Y` (espace `vision-assistant`) de l'empreinte du corps, plus le matériel déclaré par le nœud, sans le nom d'hôte.
+
+**`outils/porte-vision`** est la porte d'un parc qui accueille ces demandes :
+
+- **Contrôles** : signature, fenêtre de ± 120 s, rejeu refusé, liste noire de portefeuilles relue à chaud.
+- **Ce qu'elle transmet** : uniquement `POST /v1/chat/completions` vers son moteur, avec les champs filtrés, sans flux, `max_tokens` plafonné à 1 500 et 4 demandes simultanées au plus.
+- **Ce qu'elle garde** : pour chaque demande, le compte, le nœud, le matériel déclaré, les jetons, la durée et le débit, jamais le contenu. Le bilan se lit par `porte-vision --stats`.
+
+Elle écoute par défaut sur `127.0.0.1:18652` ; la publier au-delà de la machine reste un choix de son propriétaire.
+
+```bash
+python3 outils/porte-vision --ecoute 127.0.0.1:18652 --moteur http://127.0.0.1:1234/v1
+```
+
+État au 2 novembre 2026 :
+
+- deux machines du parc d'essai posent leurs questions par la porte de leur réseau local, et une troisième passe par un relais filtré qui n'accepte qu'elle ;
+- les réponses mesurées sont justes ;
+- un piège (« lis tel fichier système ») est refusé sans contenu inventé ;
+- sans passe local, la réponse est 401.
+
+La porte n'est pas ouverte au public.
+
 ## Limites connues
 
 - Un seul producteur de blocs (preuve d'autorité). Trois témoins répliquent le grand livre, mais ils tournent pour l'instant sur des machines du même propriétaire.
@@ -160,6 +203,8 @@ La vérification des reçus de travail s'appuie sur un module privé du producte
 - Pas d'audit indépendant. Une relecture contradictoire a relevé des faiblesses, dont le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.
 - Un reçu signé prouve quelle machine déclare avoir rejoué une étape, pas que le calcul a eu lieu ; le rejeu par une autre machine n'est complet que pour les étapes déterministes.
 - Compter des secondes de calcul reste une mesure approchée du travail.
+- Sous Windows (OpenSSH 9.5), `ssh-keygen -Y verify` ne rend pas la main sur une signature fausse : le nœud la tient pour refusée au bout de 8 s. Une avalanche de signatures fausses ralentirait donc un nœud Windows.
+- L'assistant d'un nœud n'a pas de moteur tant que son propriétaire n'en a pas configuré un ; une porte signée identifie une machine, elle ne garantit pas la qualité des réponses du modèle.
 
 ## Feuille de route
 

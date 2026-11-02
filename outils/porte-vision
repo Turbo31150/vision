@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """porte-vision — la porte d'un parc VISION : l'assistant des nœuds de la bêta y pose ses questions (02/11/2026).
 
-Authentification sans compte ni mot de passe : chaque demande est signée par le portefeuille du nœud
+Authentification par signature, sans compte à créer : chaque demande est signée par le portefeuille du nœud
 (ssh-keygen, espace « vision-assistant »), comme les transactions de la chaîne. La porte :
   - vérifie la signature, l'horodatage (± 120 s) et refuse le rejeu d'une même signature ;
   - ne transmet QUE la demande de réponse (POST /v1/chat/completions) au moteur du parc (par défaut le hub

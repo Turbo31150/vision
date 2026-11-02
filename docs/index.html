@@ -209,6 +209,14 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
     </div>
   </section>
 
+  <section class="section" id="assistant">
+    <div class="cadre">
+      <h2>L'assistant, connecté par le nœud</h2>
+      <p class="chapeau">L'onglet Assistant du portefeuille répond à partir d'une fiche mesurée par le nœud : hauteur, nœuds actifs, solde, mouvements. Ce qui n'y figure pas s'écrit « non vérifié ». Il ne lit aucun fichier et ne lance aucune commande.</p>
+      <p>En mode passerelle, chaque question part signée par le portefeuille, sans compte à créer. La porte d'un parc (<code>outils/porte-vision</code>) vérifie la signature, l'heure et le rejeu, puis ne transmet que la demande de réponse à son moteur ; elle mesure l'usage sans garder aucun contenu. Le moteur est choisi par le propriétaire du nœud, jamais par la requête. La porte du parc d'essai n'est pas ouverte au public.</p>
+    </div>
+  </section>
+
   <section class="section">
     <div class="cadre">
       <h2>Le parc en ce moment</h2>

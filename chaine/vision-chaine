@@ -182,9 +182,17 @@ def verifier_sig(texte, signature, pub, identite, espace):
         (Path(t) / "a").write_text(f'{identite} namespaces="{espace}" {pub}\n', encoding="utf-8", newline="\n")
         (Path(t) / "m").write_text(texte, encoding="utf-8", newline="\n")
         with open(Path(t) / "m", "rb") as message:
-            r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n", espace,
-                                "-s", str(Path(t) / "s")], stdin=message, capture_output=True, text=True,
-                               env=SANS_AGENT, timeout=20, **SANS_FENETRE)
+            try:
+                r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n",
+                                    espace, "-s", str(Path(t) / "s")], stdin=message, capture_output=True, text=True,
+                                   env=SANS_AGENT, timeout=8 if os.name == "nt" else 20, **SANS_FENETRE)
+            except subprocess.TimeoutExpired:
+                # Windows (OpenSSH 9.5.6.4, mesuré le 02/11/2026) : sur une signature FAUSSE, ssh-keygen -Y verify ne
+                # rend jamais la main ; une bonne signature répond en moins d'une seconde. Le délai écoulé vaut donc
+                # refus : seule une sortie 0 accepte une signature. Ailleurs, le comportement ne change pas.
+                if os.name != "nt":
+                    raise
+                return False
         return r.returncode == 0
 
 
