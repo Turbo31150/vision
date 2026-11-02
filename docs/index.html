@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VISION · le travail d'une machine, vérifié par une autre</title>
-<meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et une récompense sur preuve. Unités d'essai sans valeur, rien en vente.">
+<meta name="description" content="VISION, réseau d'essai : un nœud qui s'installe en un fichier, un portefeuille de bureau, la puissance de plusieurs machines mise en commun et des points de travail calculés sur preuve, en simulation. Unités d'essai sans valeur, rien en vente.">
 <link rel="icon" href="icone.svg">
 <link rel="preload" href="polices/UbuntuSans-variable.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -32,7 +32,7 @@
     <div class="cadre">
       <div>
       <h1>Le travail d'une machine ne compte qu'après le regard d'une autre.</h1>
-      <p>VISION relie des machines équipées de cartes graphiques pour faire tourner l'IA en local. Chacune installe un nœud et son portefeuille ; chaque calcul est rejoué et signé par une autre machine avant d'être récompensé.</p>
+      <p>VISION relie des machines équipées de cartes graphiques pour faire tourner l'IA en local. Chacune installe un nœud et son portefeuille ; chaque calcul est rejoué et signé par une autre machine avant d'être compté. Ces points restent expérimentaux : aucune récompense n'est émise.</p>
       <div class="actions">
         <a class="bouton principal" href="#rejoindre">Installer un nœud</a>
         <a class="bouton" href="explorateur/">Ouvrir l'explorateur</a>
@@ -77,15 +77,15 @@
       <p class="chapeau">Tout ce qui suit fonctionne sur nos machines depuis le 2 novembre 2026, sur une chaîne d'essai.</p>
       <dl class="tourne">
         <dt>Le nœud</dt>
-        <dd>Il s'installe en un seul fichier, sans droits d'administrateur. À la première ouverture, il crée deux clés sur la machine, une pour le nœud et une pour le portefeuille ; elles ne la quittent jamais. Il rejoue toute la chaîne depuis le bloc 0 et refuse ce qui ne se vérifie pas.</dd>
+        <dd>Il s'installe en un seul fichier, sans droits d'administrateur. À la première ouverture, il crée deux clés sur la machine, une pour le nœud et une pour le portefeuille ; le logiciel ne les transmet jamais. Il rejoue toute la chaîne depuis le bloc 0 et refuse ce qui ne se vérifie pas.</dd>
         <dt>Le portefeuille</dt>
         <dd>Servi uniquement sur la machine, il montre le solde, l'adresse, les dépenses signées, les blocs, le réseau et la puissance partagée. On s'y connecte avec une adresse pour lire un compte tel que la chaîne le connaît.</dd>
         <dt>Les unités VISION-essai</dt>
-        <dd>Un service rendu par le réseau se règle par une dépense signée par le portefeuille. 20 % des unités sont détruites, 80 % reviennent à la réserve qui récompense les machines. Aucune instruction ne transfère des unités d'un compte à un autre.</dd>
+        <dd>Un service rendu par le réseau se règle par une dépense signée par le portefeuille. 20 % des unités sont détruites, 80 % reviennent à la réserve d'usage, aucune part ne va à un autre compte. Aucune instruction ne transfère des unités d'un compte à un autre.</dd>
         <dt>Le partage de puissance</dt>
-        <dd>Chaque nœud annonce lui-même sa machine : cartes, mémoire, cœurs, charge. Les annonces sont vérifiées puis additionnées, et l'explorateur montre la puissance réellement en ligne.</dd>
-        <dt>La récompense</dt>
-        <dd>Un travail compte quand une autre machine l'a rejoué et a signé un reçu. Chaque semaine, le budget de l'époque se partage au prorata des points ; ce budget est divisé par deux chaque année. C'est une règle de calcul, pas une promesse de gain : les unités n'ont aucune valeur. Pour l'instant, les récompenses restent calculées en simulation.</dd>
+        <dd>Chaque nœud annonce lui-même sa machine : cartes, mémoire, cœurs, charge. Les annonces sont signées par chaque nœud puis additionnées. La signature prouve quel nœud parle, pas que la carte déclarée existe : il n'y a pas encore d'attestation matérielle. L'explorateur montre donc la puissance déclarée par les nœuds joignables.</dd>
+        <dt>Les points de travail</dt>
+        <dd>Un travail compte quand une autre machine l'a rejoué et a signé un reçu. Chaque semaine, le budget de l'époque se partage au prorata des points ; ce budget est divisé par deux chaque année. C'est une règle de calcul, pas une promesse de gain : le budget est fictif, non convertible et ne donne droit à aucun paiement. Pour l'instant, les récompenses restent calculées en simulation.</dd>
         <dt>L'explorateur</dt>
         <dd>Les blocs, les transactions, les nœuds et les soldes sont publiés ici avec leurs signatures. Un nœud lit cette copie et la rejoue lui-même : elle ne peut rien lui imposer.</dd>
       </dl>
@@ -95,7 +95,7 @@
   <section class="section" id="pas-a-pas">
     <div class="cadre">
       <h2>Comment ça marche, pas à pas</h2>
-      <p class="chapeau">De l'installation à la récompense : ce que fait chaque machine, et ce que vous pouvez vérifier vous-même.</p>
+      <p class="chapeau">De l'installation au calcul des points : ce que fait chaque machine, et ce que vous pouvez vérifier vous-même.</p>
       <ol class="pas">
         <li>
           <figure class="capture"><img src="images/reseau.jpg" alt="Plusieurs ordinateurs reliés par des lignes lumineuses autour d'une pile de blocs translucides." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
@@ -131,7 +131,7 @@
           <figure class="capture" id="fig-puissance"><img src="images/puissance.jpg" alt="Les cartes graphiques de trois ordinateurs réunissent leur puissance en un seul flux lumineux vers un cœur d'IA locale." width="1024" height="768" loading="lazy"><figcaption>Illustration générée par IA (Mistral).</figcaption></figure>
           <div class="pas-texte">
             <h3>Mettre la puissance en commun</h3>
-            <p>Chaque nœud annonce sa machine : cartes graphiques, mémoire, cœurs, charge. L'annonce est signée par la clé du nœud, vérifiée, puis additionnée aux autres. L'explorateur ne compte une machine en ligne que si elle a répondu dans les deux dernières minutes.</p>
+            <p>Chaque nœud annonce sa machine : cartes graphiques, mémoire, cœurs, charge. L'annonce est signée par la clé du nœud, puis additionnée aux autres. La signature prouve quel nœud l'a faite, pas que le matériel déclaré existe : aucune attestation matérielle n'est encore en place. L'explorateur ne compte une machine en ligne que si elle a répondu dans les deux dernières minutes.</p>
             <p>VISION n'exécute rien lui-même. Les modèles d'IA tournent sur les machines ; VISION recense la puissance disponible et inscrit les preuves du travail fait.</p>
           </div>
         </li>
@@ -170,7 +170,7 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
         <li style="--c: var(--credit)"><b>Créditée</b><span>Par des factures d'essai seulement : aucune somme n'est encaissée.</span></li>
         <li style="--c: var(--ambre)"><b>Dépensée</b><span>Une réponse d'un modèle, une lecture d'image : le portefeuille signe la dépense, le producteur la scelle dans un bloc.</span></li>
         <li style="--c: var(--corail)"><b>Détruite à 20 %</b><span>Le reste retourne à la réserve d'usage. Les unités en circulation ne font que diminuer.</span></li>
-        <li style="--c: var(--sarcelle)"><b>Rendue aux machines</b><span>À la clôture de l'époque, le mercredi à 12:00 UTC, la réserve récompense le travail vérifié et les vérifications signées.</span></li>
+        <li style="--c: var(--sarcelle)"><b>Comptée en points</b><span>À la clôture de l'époque, le mercredi à 12:00 UTC, le budget se répartit en points entre le travail vérifié et les vérifications signées. Pour l'instant, ce calcul reste une simulation.</span></li>
       </ol>
     </div>
   </section>
@@ -291,7 +291,8 @@ sha256sum -c installer-noeud-vision.sh.sha256</pre></li>
       <div>
         <h2>Limites connues</h2>
         <ul class="sobre">
-          <li><b>Un seul producteur.</b> La machine principale signe tous les blocs ; il n'y a pas encore de consensus distribué.</li>
+          <li><b>Un seul producteur.</b> La machine principale signe tous les blocs et importe les demandes d'inscription des nœuds ; il n'y a pas encore de consensus distribué. Les trois témoins du grand livre copient et contrôlent : ils ne produisent pas de blocs.</li>
+          <li><b>Du matériel déclaré.</b> Chaque nœud annonce lui-même ses cartes et sa charge ; rien ne l'atteste matériellement. Le temps de calcul déclaré peut être faussé.</li>
           <li><b>Un transport en clair.</b> Les blocs et les transactions sont signés, mais les échanges entre nœuds ne sont pas chiffrés.</li>
           <li><b>Pas d'audit indépendant.</b> Une relecture contradictoire a relevé des faiblesses : le rejeu possible d'une dépense déjà scellée et l'absence de limite sur la taille des requêtes entre nœuds. Ces deux points sont corrigés dans ce dépôt, sans audit extérieur à ce jour. La chaîne publique ne contient à ce jour aucune dépense.</li>
           <li><b>Une mesure approchée.</b> Compter des secondes de calcul reste une mesure approchée du travail. Les critiques sont bienvenues, en ticket sur le dépôt.</li>

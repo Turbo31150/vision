@@ -15,11 +15,11 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | **Vérifier la chaîne soi-même** | [Vérifier sans nous croire](#vérifier-sans-nous-croire) |
 
 **En bref**
-- **Un nœud en un fichier**, sans droits d'administrateur ; deux clés ed25519 créées sur la machine, qui ne la quittent jamais.
+- **Un nœud en un fichier**, sans droits d'administrateur ; deux clés ed25519 créées et gardées sur la machine ; le logiciel ne les transmet jamais.
 - **Un portefeuille de bureau**, servi uniquement sur la machine (`127.0.0.1`), avec connexion par adresse.
 - **Une chaîne signée, rejouée par chaque nœud** depuis le bloc 0 ; un vérificateur indépendant la rejoue sans le code du nœud.
-- **La puissance mise en commun** : chaque machine annonce ses cartes, sa mémoire et sa charge ; les annonces sont signées puis additionnées.
-- **Une récompense sur preuve** : un travail ne compte qu'avec le reçu signé d'une autre machine. Pour l'instant, les récompenses restent calculées en simulation.
+- **La puissance mise en commun** : chaque machine annonce ses cartes, sa mémoire et sa charge ; les annonces sont signées puis additionnées. C'est une puissance déclarée : aucune attestation matérielle n'est encore en place.
+- **Des points sur preuve, en simulation** : un travail ne compte qu'avec le reçu signé d'une autre machine. Aucune récompense n'est émise : le budget est fictif, non convertible et ne donne droit à aucun paiement.
 
 ![Capture réelle de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
 
