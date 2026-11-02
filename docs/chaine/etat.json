@@ -1,5 +1,5 @@
 {
- "genere_le": "2026-11-02T18:06:28Z",
+ "genere_le": "2026-11-02T18:46:14Z",
  "hauteur": 3,
  "transactions": 5,
  "soldes": {
@@ -12,17 +12,17 @@
  "inscrits": [],
  "reseau": {
   "total": {
-   "noeuds_actifs": 4,
-   "noeuds_connus": 4,
+   "noeuds_actifs": 3,
+   "noeuds_connus": 3,
    "machines": 3,
    "gpus": 4,
    "vram_go": 36.0,
-   "vram_libre_go": 3.7,
-   "gpu_utilisation_pct": 6,
+   "vram_libre_go": 4.0,
+   "gpu_utilisation_pct": 41,
    "cpu_coeurs": 24,
    "ram_go": 89.3,
-   "hauteur": 2,
-   "synchronises": 4,
+   "hauteur": 3,
+   "synchronises": 3,
    "inscrits": 0
   },
   "noeuds": [
@@ -30,7 +30,7 @@
     "nom": "m0",
     "role": "pair",
     "actif": true,
-    "hauteur": 2,
+    "hauteur": 3,
     "materiel": {
      "gpus": [
       {
@@ -50,7 +50,7 @@
     "nom": "m6",
     "role": "pair",
     "actif": true,
-    "hauteur": 2,
+    "hauteur": 3,
     "materiel": {
      "gpus": [
       {
@@ -70,31 +70,11 @@
     "nom": "portable",
     "role": "pair",
     "actif": true,
-    "hauteur": 2,
+    "hauteur": 3,
     "materiel": {
      "gpus": [],
      "cpu_coeurs": 4,
      "ram_mo": 11337
-    }
-   },
-   {
-    "nom": "m0",
-    "role": "pair",
-    "actif": true,
-    "hauteur": 2,
-    "materiel": {
-     "gpus": [
-      {
-       "nom": "NVIDIA GeForce RTX 2060",
-       "vram_mo": 12288
-      },
-      {
-       "nom": "NVIDIA GeForce RTX 3080",
-       "vram_mo": 10240
-      }
-     ],
-     "cpu_coeurs": 16,
-     "ram_mo": 48089
     }
    }
   ]
