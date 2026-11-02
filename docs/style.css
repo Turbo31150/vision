@@ -316,3 +316,10 @@ ol.pas > li:nth-child(even) > figure { order: 2; }
   nav.liens a { padding: 6px 8px; font-size: 14px; }
   .entete { position: static; }
 }
+
+/* ── En images : cartes carrées, cliquables ── */
+ul.galerie { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+ul.galerie li { margin: 0; }
+ul.galerie a { display: block; border: 1px solid var(--t-bord); border-radius: var(--t-rayon-lg); overflow: hidden; box-shadow: var(--t-ombre-2); transition: transform var(--t-duree-2) var(--t-courbe), border-color var(--t-duree-1); }
+ul.galerie a:hover { transform: translateY(-3px); border-color: var(--t-accent); }
+ul.galerie img { display: block; width: 100%; height: auto; }

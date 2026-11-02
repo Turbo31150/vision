@@ -92,6 +92,20 @@
     </div>
   </section>
 
+  <section class="section" id="en-images">
+    <div class="cadre">
+      <h2>En images</h2>
+      <p class="chapeau">Les cartes publiées le 2 novembre, mises à jour : chiffres mesurés ce jour-là sur nos machines, captures sans retouche.</p>
+      <ul class="galerie">
+        <li><a href="images/visuels/01-verifier.jpg"><img src="images/visuels/01-verifier.jpg" alt="Chaque action importante se vérifie sur une autre machine." width="900" height="900" loading="lazy"></a></li>
+        <li><a href="images/visuels/02-parc.jpg"><img src="images/visuels/02-parc.jpg" alt="Le parc : 3 machines, 6 cartes graphiques et 48 Go de mémoire graphique, à la même hauteur de chaîne. Capture du cockpit." width="900" height="900" loading="lazy"></a></li>
+        <li><a href="images/visuels/03-preuve.jpg"><img src="images/visuels/03-preuve.jpg" alt="La preuve plutôt que la promesse : 389 tests sur 389, 15 contrôles sur les vraies données, journaux copiés sur 3 témoins." width="900" height="900" loading="lazy"></a></li>
+        <li><a href="images/visuels/04-noeud.jpg"><img src="images/visuels/04-noeud.jpg" alt="Le nœud : un fichier, deux clés créées et gardées sur la machine, la chaîne rejouée depuis le bloc 0." width="900" height="900" loading="lazy"></a></li>
+        <li><a href="images/visuels/05-tourne.jpg"><img src="images/visuels/05-tourne.jpg" alt="Ce qui tourne déjà, en réseau d'essai, sur nos machines." width="900" height="900" loading="lazy"></a></li>
+      </ul>
+    </div>
+  </section>
+
   <section class="section" id="pas-a-pas">
     <div class="cadre">
       <h2>Comment ça marche, pas à pas</h2>
@@ -108,7 +122,7 @@
         <li>
           <figure class="capture" id="fig-cles"><img src="images/noeud-cles.jpg" alt="Un ordinateur de bureau qui garde deux petites clés lumineuses à l'intérieur, entouré de blocs translucides." width="1200" height="750" loading="lazy"><figcaption>Illustration générée par IA (Manus).</figcaption></figure>
           <div class="pas-texte">
-            <h3>Installer : un fichier, deux clés qui ne sortent jamais</h3>
+            <h3>Installer : un fichier, deux clés gardées sur la machine</h3>
             <p>L'installateur est un script shell suivi d'une archive du code de ce dépôt. Il s'installe dans votre dossier personnel, sans droits d'administrateur, et crée deux clés ed25519 : une pour le nœud, une pour le portefeuille. Elles restent dans <code>~/.local/share/vision-noeud</code>.</p>
             <p>Le portefeuille n'est servi que sur la machine elle-même, à l'adresse <code>http://127.0.0.1:8861/</code>. Seul votre compte peut signer : un secret local, lisible par vous seul, est exigé, et l'adresse seule donne une lecture.</p>
           </div>
