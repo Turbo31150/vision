@@ -185,3 +185,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 700px) { .carte { overflow-x: auto; } }
 
 @media (max-width: 640px) { .ruban { flex-wrap: wrap; gap: 8px; overflow-x: visible; } .maillon + .maillon::before { display: none; } }
+
+/* assistant (02/11) */
+#assistant-question { width: 100%; box-sizing: border-box; font: inherit; padding: .7rem .8rem; border-radius: 12px;
+  border: 1px solid var(--t-bord, rgba(255,255,255,.14)); background: var(--t-fond-champ, rgba(255,255,255,.04)); color: inherit; resize: vertical; }
+.assistant-reponse { white-space: pre-wrap; margin-top: .8rem; padding: .9rem 1rem; border-radius: 12px; line-height: 1.55;
+  background: var(--t-fond-carte-2, rgba(31,190,240,.06)); border: 1px solid var(--t-bord, rgba(31,190,240,.25)); }

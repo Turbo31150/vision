@@ -471,6 +471,84 @@ class Noeud:
         return r
 
 
+    # ── assistant (02/11/2026) : l'assistant du cockpit Turbo OS, cloné dans le portefeuille ────────────────────
+    # OMEGA-LOCAL v3 tenu par le programme : les chiffres viennent de la fiche mesurée ici (P8), jamais du modèle ;
+    # une réponse coupée par la limite de jetons est relancée une fois puis marquée (P2) ; aucun outil, aucune
+    # lecture de fichier, aucune commande. Moteur : clé « assistant » du config.json, adresse fixée par le
+    # propriétaire du nœud (jamais par la requête). Chaque question peut être réglée en unités d'essai (dépense signée).
+    ASSISTANT_SYSTEME = (
+        "Tu es l'assistant du portefeuille VISION, un réseau d'ESSAI. Réponds en français, en 8 lignes au plus. "
+        "Utilise UNIQUEMENT les chiffres de la FICHE MESURÉE ci-dessous ; une information absente de la fiche s'écrit "
+        "« non vérifié ». N'invente ni nœud, ni solde, ni adresse, ni fichier, ni commande. Tu n'as aucun outil : tu ne "
+        "lis aucun fichier et tu ne lances aucune commande ; si on te le demande, dis que tu ne le fais pas, sans "
+        "inventer de contenu d'exemple. Si l'on parle d'unités : réseau d'essai, unités sans valeur, non transférables, "
+        "rien n'est en vente.")
+
+    def fiche_assistant(self):
+        e, r, p = self.vue_etat(), self.vue_reseau(), self.vue_portefeuille()
+        vus, noeuds = set(), []
+        for n in r.get("noeuds", []):
+            if n.get("nom") in vus or not n.get("actif"):
+                continue
+            vus.add(n.get("nom"))
+            cartes = ", ".join(g.get("nom", "?") for g in (n.get("capacite") or {}).get("gpus", [])) or "aucune"
+            noeuds.append(f"- {n.get('nom')} : hauteur {n.get('hauteur')}, cartes graphiques : {cartes}")
+        t = r.get("total", {})
+        mouvements = [f"- bloc {h.get('hauteur')} : {h.get('sens', '')}{h.get('unites')} unités ({h.get('type')}, "
+                      f"{h.get('detail') or h.get('service') or ''})" for h in (p.get("historique") or [])[:6]]
+        adr = str(p.get("adresse") or "")
+        return "\n".join([
+            f"Réseau d'essai {e.get('nom_reseau')} ({e.get('reseau')}) ; ce nœud : {e.get('nom')} ({e.get('role')}).",
+            f"Chaîne : hauteur {e.get('hauteur')}, synchronisation « {e.get('synchro')} », réserve d'usage restante "
+            f"{e.get('usage_restant')} unités.",
+            f"Nœuds actifs vus d'ici : {len(noeuds)}", *noeuds,
+            f"Puissance déclarée (non prouvée) : {t.get('gpus')} cartes, {t.get('vram_go')} Go de mémoire graphique.",
+            f"Portefeuille : {adr[:8]}…{adr[-4:]}, solde {p.get('solde')} unités d'essai, "
+            f"{len(p.get('en_attente') or [])} opération(s) en attente.", "Mouvements :", *(mouvements or ["- aucun"])])
+
+    def _llm(self, a, messages, max_jetons):
+        corps = json.dumps({"model": str(a.get("modele") or ""), "messages": messages, "temperature": 0.2,
+                            "max_tokens": int(max_jetons), "stream": False}).encode("utf-8")
+        req = urllib.request.Request(str(a["url"]).rstrip("/") + "/chat/completions", data=corps,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=int(a.get("delai", 180))) as rep:
+            c = json.loads(rep.read(4_000_000).decode("utf-8"))["choices"][0]
+        return (c.get("message") or {}).get("content") or "", c.get("finish_reason")
+
+    def assistant(self, question, payer=False):
+        a = self.cfg.get("assistant") or {}
+        if not re.fullmatch(r"https?://[\w.:\-\[\]]+(/[\w./-]*)?", str(a.get("url") or "")):
+            raise ValueError("assistant non configuré : renseigner « assistant.url » dans config.json")
+        q = str(question or "").strip()[:2000]
+        if not q:
+            raise ValueError("question vide")
+        fiche = self.fiche_assistant()
+        msgs = [{"role": "system", "content": self.ASSISTANT_SYSTEME + "\n\nFICHE MESURÉE :\n" + fiche},
+                {"role": "user", "content": q}]
+        try:
+            texte, fin = self._llm(a, msgs, a.get("max_jetons", 900))
+        except (OSError, ValueError, KeyError, IndexError) as e:
+            raise ValueError(f"moteur de l'assistant injoignable ({e.__class__.__name__})") from None
+        relance = coupee = False
+        if fin == "length":                     # P2 : une relance, puis la réponse est marquée coupée
+            relance = True
+            try:
+                suite, fin = self._llm(a, msgs + [{"role": "assistant", "content": texte}, {"role": "user", "content":
+                                       "Ta réponse a été coupée. Termine-la en 6 lignes au plus, sans répéter."}], 400)
+            except (OSError, ValueError, KeyError, IndexError):
+                suite, fin = "", "length"
+            texte = texte.rstrip() + "\n" + suite
+            coupee = fin == "length"
+        depense, erreur_depense = None, None
+        cout = int(a.get("cout", 1))
+        if payer and cout > 0:
+            try:
+                depense = self.depenser(cout, "assistant VISION")
+            except Exception as e:  # noqa: BLE001 — la réponse reste rendue, la dépense refusée est dite
+                erreur_depense = str(e)[:200]
+        return {"ok": True, "reponse": texte.strip(), "relance": relance, "coupee": coupee, "cout": cout if payer else 0,
+                "depense": depense, "erreur_depense": erreur_depense, "fiche": fiche}
+
     def tx_inscription(self):
         """Inscription signée par la clé du nœud ; elle rattache le portefeuille de la machine, pour la consultation."""
         pub = self.pub(self.cle_noeud)
@@ -841,6 +919,8 @@ def fabrique(noeud, local):
                 d = self.corps_json()
                 if u.path == "/api/depenser":
                     return self.envoyer(200, noeud.depenser(d.get("unites"), d.get("service", ""), d.get("noeud")))
+                if u.path == "/api/assistant":
+                    return self.envoyer(200, noeud.assistant(d.get("question"), bool(d.get("payer"))))
                 if u.path == "/api/inscrire":
                     return self.envoyer(200, noeud.inscrire())
                 if u.path == "/api/demande-inscription":

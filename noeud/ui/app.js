@@ -316,6 +316,24 @@
     catch (e) { message('message-inscription', `Refusé : ${e.message}`, false); }
   });
   $('btn-synchro').addEventListener('click', async () => { await api('/api/synchroniser', {}).catch(() => {}); rafraichir(); });
+  // assistant (02/11) : question → réponse lue sur le nœud ; dépense facultative en unités d'essai
+  $('btn-assistant').addEventListener('click', async () => {
+    const q = $('assistant-question').value.trim();
+    if (!q) return;
+    const etat = $('assistant-etat'), rep = $('assistant-reponse');
+    $('btn-assistant').disabled = true; etat.textContent = 'L\u2019assistant lit le nœud et réfléchit…'; rep.hidden = true;
+    try {
+      const r = await api('/api/assistant', { question: q, payer: $('assistant-payer').checked });
+      if (!r.ok) throw new Error(r.erreur || 'refus');
+      rep.textContent = r.reponse; rep.hidden = false;
+      const bouts = [];
+      if (r.relance) bouts.push(r.coupee ? 'réponse coupée par la limite de jetons, incomplète' : 'réponse relancée une fois après une coupure');
+      if (r.cout) bouts.push(r.depense ? `dépense de ${r.cout} unité(s) d\u2019essai signée, en attente d\u2019un bloc` : `dépense refusée : ${r.erreur_depense}`);
+      etat.textContent = bouts.join(' · ');
+      if (r.cout) rafraichir();
+    } catch (e) { etat.textContent = 'Échec : ' + e.message; }
+    finally { $('btn-assistant').disabled = false; }
+  });
   $('form-compte').addEventListener('submit', (ev) => { ev.preventDefault(); ouvrirCompte($('saisie-adresse').value); });
   $('btn-mon-adresse').addEventListener('click', () => {
     const a = (donnees.portefeuille || {}).adresse; if (a) { $('saisie-adresse').value = a; ouvrirCompte(a); }

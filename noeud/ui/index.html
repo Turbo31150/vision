@@ -20,6 +20,7 @@
     <button data-vue="reseau">Réseau</button>
     <button data-vue="blocs">Blocs</button>
     <button data-vue="noeud">Nœud</button>
+    <button data-vue="assistant">Assistant</button>
   </nav>
   <div class="haut-droite">
     <button class="petit" id="btn-rafraichir" title="Rafraîchir l'état du cockpit">↻ Rafraîchir</button>
@@ -146,6 +147,19 @@
         <input id="filtre-blocs" type="search" spellcheck="false" autocomplete="off" placeholder="Filtrer par hauteur (#12), empreinte, type, compte, nœud ou détail…">
       </div>
       <div id="blocs"></div>
+    </div>
+  </section>
+
+  <section id="vue-assistant" class="vue">
+    <div class="carte"><h2>Assistant</h2>
+      <p class="note">L'assistant lit l'état mesuré de ce nœud (chaîne, réseau, portefeuille) et répond à partir de ces chiffres seulement. Il n'a aucun outil : il ne lit aucun fichier et ne lance aucune commande. Son moteur est celui déclaré par le propriétaire du nœud (clé « assistant » du config.json).</p>
+      <textarea id="assistant-question" rows="3" maxlength="2000" placeholder="Ex. : où en est mon réseau ? quel est mon solde ?"></textarea>
+      <div class="actions">
+        <label class="petit"><input type="checkbox" id="assistant-payer"> Régler la question en unités d'essai (dépense signée, sans valeur)</label>
+        <button id="btn-assistant">Demander</button>
+      </div>
+      <div id="assistant-etat" class="note"></div>
+      <div id="assistant-reponse" class="assistant-reponse" hidden></div>
     </div>
   </section>
 
