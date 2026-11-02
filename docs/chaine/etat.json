@@ -1,28 +1,29 @@
 {
- "genere_le": "2026-11-02T18:46:14Z",
- "hauteur": 3,
- "transactions": 5,
+ "genere_le": "2026-11-02T19:42:54Z",
+ "hauteur": 4,
+ "transactions": 6,
  "soldes": {
-  "reserve:usage": 34970000,
+  "reserve:usage": 34960000,
   "detruit": 0,
   "compte:te1a29125a7f6ee5529a0d70bab7d8632145083e685": 10000,
   "compte:te1026a6c51a42a62a99d5729a3f7935b160d6cd71a": 10000,
-  "compte:te177b1ad60d6721cc8b7a9d77bd3eff0daf966b838": 10000
+  "compte:te177b1ad60d6721cc8b7a9d77bd3eff0daf966b838": 10000,
+  "compte:te19058d92439ebdbc277e7aa77d4916cd879c5d379": 10000
  },
  "inscrits": [],
  "reseau": {
   "total": {
-   "noeuds_actifs": 3,
+   "noeuds_actifs": 2,
    "noeuds_connus": 3,
-   "machines": 3,
+   "machines": 2,
    "gpus": 4,
    "vram_go": 36.0,
-   "vram_libre_go": 4.0,
-   "gpu_utilisation_pct": 41,
-   "cpu_coeurs": 24,
-   "ram_go": 89.3,
+   "vram_libre_go": 7.0,
+   "gpu_utilisation_pct": 8,
+   "cpu_coeurs": 20,
+   "ram_go": 78.3,
    "hauteur": 3,
-   "synchronises": 3,
+   "synchronises": 2,
    "inscrits": 0
   },
   "noeuds": [
@@ -69,7 +70,7 @@
    {
     "nom": "portable",
     "role": "pair",
-    "actif": true,
+    "actif": false,
     "hauteur": 3,
     "materiel": {
      "gpus": [],

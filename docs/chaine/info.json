@@ -2,9 +2,9 @@
  "reseau": "vision-essai",
  "essai": true,
  "bloc0": "0f777921fe8377009c7f69515713e111c2f527ec7cff32844f1ca5c2249bb046",
- "hauteur": 3,
- "tete": "c87ce848266885db3827a5870680584a1e675c253c56b3a5caec22aa2fd7bc83",
+ "hauteur": 4,
+ "tete": "662db2692e4d5c831ffe84e572a8fe17618d42f0714650ab2ca5ced4f13182ad",
  "producteur_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC/xh5PCUsfeopF0YqAzSC7SzNPrG3UiuV9u8d5INsub",
- "genere_le": "2026-11-02T18:06:28Z",
+ "genere_le": "2026-11-02T19:42:54Z",
  "note": "Chaîne d'essai : unités sans valeur, non cessibles ; rien n'est vendu ni offert au public."
 }
