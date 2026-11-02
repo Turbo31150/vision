@@ -43,12 +43,27 @@
     const m = $(cible); m.hidden = false; m.className = `message ${ok ? 'ok' : 'ko'}`; m.textContent = texte;
   }
 
+  function jauge(valeur, max = 100, etiquette = '') {
+    const v = Math.max(0, Math.min(max, Number(valeur) || 0));
+    const p = el('progress', { class: 'jauge', value: String(v), max: String(max) });
+    return el('div', { class: 'jauge-zone' }, p, etiquette ? el('small', {}, etiquette) : null);
+  }
+
+  function copierTexte(btn, texte) {
+    if (!navigator.clipboard || !texte) return;
+    const init = btn.textContent;
+    navigator.clipboard.writeText(texte).then(() => {
+      btn.textContent = 'Copié ✓';
+      setTimeout(() => { btn.textContent = init; }, 1400);
+    }).catch(() => {});
+  }
+
   function tableau(colonnes, lignes, vide) {
     if (!lignes.length) return el('div', { class: 'vide' }, vide || 'Rien pour l’instant.');
-    return el('table', {}, el('thead', {}, el('tr', {}, colonnes.map((c) => el('th', {}, c[0])))),
+    return el('div', { class: 'table-boite' }, el('table', {}, el('thead', {}, el('tr', {}, colonnes.map((c) => el('th', {}, c[0])))),
       el('tbody', {}, lignes.map((l) => el('tr', {}, colonnes.map((c) => {
         const v = c[1](l); return v instanceof Node ? el('td', {}, v) : el('td', { class: c[2] || '' }, v);
-      })))));
+      }))))));
   }
 
   function bloc(b, ouvert) {
@@ -107,6 +122,8 @@
 
   function ouvrirBloc(h) {
     document.querySelector('#onglets button[data-vue="blocs"]')?.click();
+    const f = $('filtre-blocs');
+    if (f && f.value) { f.value = ''; rendreBlocs(); }
     const cible = document.querySelector(`#blocs .bloc[data-h="${CSS.escape(String(h))}"]`);
     if (!cible) return;
     document.querySelectorAll('#blocs .bloc.cible').forEach((x) => x.classList.remove('cible'));
@@ -129,8 +146,9 @@
 
   function rendrePuissance() {
     const z = donnees.puissance; if (!z) return;
-    vider($('gpus'), z.gpus.length ? z.gpus.map((g) => el('div', { class: 'gpu' }, el('b', {}, g.nom),
-      el('span', { class: 'mono' }, `${g.memoire_mo} Mo · ${g.utilisation_pct} % · ${g.temperature} °C`)))
+    vider($('gpus'), z.gpus.length ? z.gpus.map((g) => el('div', { class: 'gpu' },
+      el('div', { class: 'gpu-ligne' }, el('b', {}, g.nom), el('span', { class: 'mono' }, `${g.memoire_mo} Mo · ${g.utilisation_pct} % · ${g.temperature} °C`)),
+      jauge(g.utilisation_pct, 100, `Charge GPU ${g.utilisation_pct} %`)))
       : el('div', { class: 'vide' }, 'Aucune carte NVIDIA détectée sur cette machine.'));
     $('regle-puissance').textContent = `Règle : ${z.regle}.`;
     $('solde-noeud').textContent = `${fr.format(z.solde_noeud)} VISION-essai`;
@@ -145,18 +163,21 @@
   function rendreEpoque() {
     const ep = donnees.epoque; if (!ep) return;
     const c = ep.courante;
-    const reste = Math.max(0, new Date(c.fin) - Date.now());
+    const tDebut = new Date(c.debut).getTime(), tFin = new Date(c.fin).getTime(), tNow = Date.now();
+    const reste = Math.max(0, tFin - tNow);
+    const pct = tFin > tDebut ? Math.max(0, Math.min(100, Math.round(((tNow - tDebut) / (tFin - tDebut)) * 100))) : 100;
     const j = Math.floor(reste / 864e5), h = Math.floor((reste % 864e5) / 36e5);
-    $('epoque-badge').textContent = `n° ${c.numero} · ${reste ? `fin dans ${j} j ${h} h` : 'terminée, clôture au prochain passage'}`;
+    $('epoque-badge').textContent = `n° ${c.numero} · ${reste ? `fin dans ${j} j ${h} h (${pct} %)` : 'terminée, clôture au prochain passage'}`;
     const lignes = [['Fenêtre', `${heure(c.debut)} → ${heure(c.fin)}`], ['Budget de l’époque', `${fr.format(c.budget)} (divisé par deux chaque année)`],
       ['Règles', c.regles_v2 ? 'v2 : rétribution par époque' : 'v1 : récompense immédiate (v2 pas encore active)']];
     if (c.justifie != null) lignes.push(['Points justifiés à ce jour', fr.format(c.justifie)], ['Émission projetée', fr.format(c.emis_projete)]);
     if (c.erreur) lignes.push(['Projection', c.erreur]);
     const dl = el('dl', { class: 'cv' }, lignes.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+    const barreEpoque = jauge(pct, 100, `${pct} % de la fenêtre écoulée`);
     const proj = c.scores ? tableau([['Nœud', (x) => x[0]], ['Points', (x) => fr.format(x[1]), 'num'],
       ['Part projetée', (x) => fr.format((c.attributions_projetees || {})[x[0]] || 0), 'num plus']], Object.entries(c.scores), 'Aucune contribution vérifiée dans cette époque.')
       : el('p', { class: 'note' }, 'La projection se calcule sur le nœud producteur, qui lit les reçus de vérification ; ce nœud verra le résultat à la clôture.');
-    vider($('epoque'), dl, proj);
+    vider($('epoque'), barreEpoque, dl, proj);
     vider($('epoques-closes'), tableau([['Époque', (e) => `n° ${e.numero}`], ['Bloc', (e) => `#${e.hauteur}`],
       ['Contributions', (e) => e.contributions, 'num'], ['Points', (e) => fr.format(e.justifie), 'num'], ['Émis', (e) => fr.format(e.emis), 'num plus'],
       ['Parts', (e) => Object.entries(e.attributions).map(([n, u]) => `${n} ${fr.format(u)}`).join(' · ')]], ep.closes,
@@ -171,7 +192,6 @@
     const leg = el('div', { class: 'legende' });
     const maj = () => {
       const s = p.services[+sel.value]; const d = Math.floor(s.prix * 20 / 100);
-      barre.children[0].style.width = '20%'; barre.children[1].style.width = '80%';
       const v2 = (donnees.etat || {}).regles === 2;
       vider(leg, el('span', { class: 'detruit' }, `${d} détruites`),
         el('span', { class: 'plus' }, v2 ? `${s.prix - d} recyclées dans la réserve des époques` : `${s.prix - d} au nœud ${s.noeud}`));
@@ -256,6 +276,18 @@
     $('btn-demande').disabled = e.inscrit;
   }
 
+  function rendreBlocs() {
+    const tous = donnees.blocs || [];
+    const q = (($('filtre-blocs') || {}).value || '').trim().toLowerCase();
+    const filtres = !q ? tous : tous.filter((b) => {
+      if (`#${b.hauteur}`.includes(q) || String(b.hauteur) === q || (b.empreinte || '').toLowerCase().includes(q)) return true;
+      return (b.transactions || []).some((t) => [t.type, TYPES[t.type], t.compte, t.noeud, t.service, t.facture, t.motif, t.mission, t.etape, t.adresse, t.id]
+        .some((x) => x && String(x).toLowerCase().includes(q)));
+    });
+    if ($('blocs-compte')) $('blocs-compte').textContent = q ? `${filtres.length}/${tous.length}` : `${tous.length} blocs`;
+    vider($('blocs'), filtres.length ? filtres.map((b, i) => bloc(b, i === 0 || Boolean(q))) : el('div', { class: 'vide' }, 'Aucun bloc ne correspond à ce filtre.'));
+  }
+
   async function rafraichir() {
     try {
       const [etat, portefeuille, puissance, blocs, epoque, reseau] = await Promise.all([api('/api/etat'), api('/api/portefeuille'),
@@ -263,7 +295,7 @@
       donnees = { etat, portefeuille, puissance, blocs, epoque, reseau };
       rendreReseau();
       rendreEtat(etat); rendreMiroirs(etat); rendreApercu(); rendrePortefeuille(); rendrePuissance();
-      vider($('blocs'), blocs.map((b, i) => bloc(b, i === 0)));
+      rendreBlocs();
     } catch (e) {
       $('pastille-synchro').className = 'pastille ko'; $('etat-synchro').textContent = `nœud injoignable (${e.message})`;
     }
@@ -276,7 +308,9 @@
   }));
   $('btn-depenser').addEventListener('click', formulaireDepense);
   $('btn-recevoir').addEventListener('click', recevoir);
-  $('copier').addEventListener('click', () => navigator.clipboard?.writeText($('adresse').textContent));
+  $('copier').addEventListener('click', (ev) => copierTexte(ev.currentTarget, $('adresse').textContent));
+  $('btn-rafraichir')?.addEventListener('click', () => rafraichir());
+  $('filtre-blocs')?.addEventListener('input', () => rendreBlocs());
   $('btn-inscrire').addEventListener('click', async () => {
     try { const r = await api('/api/inscrire', {}); message('message-inscription', `Inscription signée et transmise : ${r.statut}.`, true); rafraichir(); }
     catch (e) { message('message-inscription', `Refusé : ${e.message}`, false); }
@@ -291,9 +325,10 @@
     try {
       const r = await api('/api/demande-inscription', {});
       const zone = el('textarea', { class: 'demande-json', readonly: 'readonly', rows: '12' }); zone.value = r.corps;
+      const btnCopier = el('button', { onclick: (ev) => copierTexte(ev.currentTarget, r.corps) }, 'Copier');
       vider(d, el('p', { class: 'note' }, 'Transaction signée par la clé de ce nœud, prête à déposer. Elle ne contient ni clé privée ni secret.'), zone,
         el('div', { class: 'actions' },
-          el('button', { onclick: () => navigator.clipboard?.writeText(r.corps) }, 'Copier'),
+          btnCopier,
           r.ticket ? el('a', { class: 'bouton primaire', href: r.ticket, target: '_blank', rel: 'noopener' }, 'Déposer la demande sur GitHub') : null));
       d.hidden = false;
     } catch (e) { vider(d, el('div', { class: 'message ko' }, `Refusé : ${e.message}`)); d.hidden = false; }

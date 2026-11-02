@@ -162,18 +162,18 @@ SANS_AGENT = {k: v for k, v in os.environ.items() if k != "SSH_AUTH_SOCK"}
 def signer(texte, cle, espace):
     with tempfile.TemporaryDirectory() as t:
         f = Path(t) / "m"
-        f.write_text(texte)
+        f.write_text(texte, encoding="utf-8", newline="\n")
         r = subprocess.run(["ssh-keygen", "-Y", "sign", "-f", str(cle), "-n", espace, str(f)],
                            capture_output=True, text=True, stdin=subprocess.DEVNULL, env=SANS_AGENT, timeout=20)
         if r.returncode:
             raise Refus(f"signature impossible : {r.stderr.strip()[:200]}")
-        return (Path(t) / "m.sig").read_text()
+        return (Path(t) / "m.sig").read_text(encoding="utf-8")
 
 
 def verifier_sig(texte, signature, pub, identite, espace):
     with tempfile.TemporaryDirectory() as t:
-        (Path(t) / "s").write_text(signature)
-        (Path(t) / "a").write_text(f'{identite} namespaces="{espace}" {pub}\n')
+        (Path(t) / "s").write_text(signature, encoding="utf-8", newline="\n")
+        (Path(t) / "a").write_text(f'{identite} namespaces="{espace}" {pub}\n', encoding="utf-8", newline="\n")
         r = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(Path(t) / "a"), "-I", identite, "-n", espace,
                             "-s", str(Path(t) / "s")], input=texte, capture_output=True, text=True,
                            env=SANS_AGENT, timeout=20)
@@ -184,7 +184,7 @@ def pub_de(cle):
     p = Path(str(cle) + ".pub")
     if not p.exists():
         raise Refus(f"clé publique absente : {p}")
-    a = p.read_text().split()
+    a = p.read_text(encoding="utf-8").split()
     return f"{a[0]} {a[1]}"
 
 
@@ -192,20 +192,20 @@ def pub_de(cle):
 def lire_jsonl(f):
     if not f.exists():
         return []
-    return [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+    return [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
 def ecrire_jsonl(f, lignes):
     f.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = f.with_suffix(".tmp")
-    tmp.write_text("".join(canon(x) + "\n" for x in lignes))
+    tmp.write_text("".join(canon(x) + "\n" for x in lignes), encoding="utf-8", newline="\n")
     os.chmod(tmp, 0o600)
     os.replace(tmp, f)
 
 
 def ajouter_jsonl(f, x):
     f.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with open(f, "a", encoding="utf-8") as h:
+    with open(f, "a", encoding="utf-8", newline="\n") as h:
         h.write(canon(x) + "\n")
     os.chmod(f, 0o600)
 
@@ -1039,6 +1039,9 @@ def cmd_cosigner(a):
 
 
 def main():
+    for _s in (sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     s = ap.add_subparsers(dest="cmd", required=True)
     s.add_parser("init")

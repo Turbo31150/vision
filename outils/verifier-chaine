@@ -70,9 +70,9 @@ def signature_ok(texte, signature, pub, identite, espace):
         return False
     with tempfile.TemporaryDirectory() as d:
         a, s = os.path.join(d, "a"), os.path.join(d, "s")
-        with open(a, "w", encoding="utf-8") as f:
+        with open(a, "w", encoding="utf-8", newline="\n") as f:
             f.write(f'{identite} namespaces="{espace}" {pub}\n')
-        with open(s, "w", encoding="utf-8") as f:
+        with open(s, "w", encoding="utf-8", newline="\n") as f:
             f.write(signature)
         return subprocess.run(["ssh-keygen", "-Y", "verify", "-f", a, "-I", identite, "-n", espace, "-s", s],
                               input=texte.encode("utf-8"), capture_output=True, env=SANS_AGENT, timeout=20).returncode == 0
@@ -389,6 +389,9 @@ def lire(source, nom_fichier):
 
 
 def main():
+    for _s in (sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("source")
     a.add_argument("--cle-origine")

@@ -7,9 +7,13 @@ PASSE=$(cat "$PREFIXE/cles/passe-local" 2>/dev/null)
 ENTREE=$(mktemp "$PREFIXE/.ouvrir-XXXXXX.html")
 printf '<!doctype html><meta charset="utf-8"><script>location.replace("http://%s/#passe=%s")</script>\n' "$API" "$PASSE" > "$ENTREE"
 ( sleep 20; rm -f "$ENTREE" ) >/dev/null 2>&1 </dev/null &
-for b in google-chrome chromium chromium-browser brave-browser microsoft-edge; do
+for b in google-chrome chromium chromium-browser brave-browser microsoft-edge msedge; do
   if command -v "$b" >/dev/null; then
     exec "$b" --app="file://$ENTREE" --user-data-dir="$PREFIXE/navigateur" --window-size=1280,860 --no-first-run
   fi
 done
-exec xdg-open "file://$ENTREE"
+if command -v xdg-open >/dev/null 2>&1; then
+  exec xdg-open "file://$ENTREE"
+elif command -v cmd.exe >/dev/null 2>&1; then
+  exec cmd.exe /c start "" "http://$API/#passe=$PASSE"
+fi

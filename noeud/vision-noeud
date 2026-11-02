@@ -23,6 +23,7 @@ Unités d'essai sans valeur ; rien n'est vendu ni offert au public.
 """
 import argparse
 import csv
+import ctypes
 import http.client
 import importlib.machinery
 import importlib.util
@@ -30,6 +31,7 @@ import io
 import hmac
 import json
 import os
+import platform
 import re
 import secrets
 import shutil
@@ -45,6 +47,10 @@ import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
 
 VERSION = "0.5.1-essai"
 # adresse annoncée par un pair : http, réseau privé ou boucle locale seulement (jamais une adresse publique)
@@ -95,10 +101,10 @@ def passe_local(f):
     try:
         fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        return f.read_text().strip()
-    with os.fdopen(fd, "w") as h:
+        return f.read_text(encoding="utf-8").strip()
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as h:
         h.write(secrets.token_urlsafe(32) + "\n")
-    return f.read_text().strip()
+    return f.read_text(encoding="utf-8").strip()
 
 
 class Noeud:
@@ -113,7 +119,7 @@ class Noeud:
             bloc0 = os.path.expanduser(cfg["bloc0"])
         else:   # un pair n'a que la clé PUBLIQUE du producteur, épinglée à l'installation
             cle = str(self.chaine / "producteur")
-            Path(cle + ".pub").write_text(cfg["producteur_pub"].strip() + "\n")
+            Path(cle + ".pub").write_text(cfg["producteur_pub"].strip() + "\n", encoding="utf-8", newline="\n")
             bloc0 = str(self.chaine / "bloc0.json")
         os.environ.update({"VISION_CHAINE": str(self.chaine), "VISION_BLOC0": bloc0, "VISION_CLE": cle,
                            "VISION_JOURNAL": cfg.get("vision", "/nonexistent")})
@@ -155,19 +161,40 @@ class Noeud:
                 pass
         mem = {}
         try:
-            for l in open("/proc/meminfo"):
+            for l in open("/proc/meminfo", encoding="utf-8"):
                 k, v = l.split(":", 1)
                 mem[k] = int(v.split()[0]) // 1024
         except (OSError, ValueError):
-            pass
+            if os.name == "nt":
+                try:
+                    class _MemStat(ctypes.Structure):
+                        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+                    ms = _MemStat(dwLength=ctypes.sizeof(_MemStat))
+                    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms)):
+                        mem["MemTotal"] = int(ms.ullTotalPhys // (1024 * 1024))
+                        mem["MemAvailable"] = int(ms.ullAvailPhys // (1024 * 1024))
+                except Exception:
+                    pass
         modele = ""
         try:
-            modele = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), "")
+            modele = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo", encoding="utf-8") if l.startswith("model name")), "")
         except OSError:
-            pass
-        c = {"machine": os.uname().nodename, "gpus": gpus, "cpu_coeurs": os.cpu_count(), "cpu_modele": modele,
+            if os.name == "nt":
+                try:
+                    import winreg
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\Description\System\CentralProcessor\0") as k:
+                        modele = str(winreg.QueryValueEx(k, "ProcessorNameString")[0]).strip()
+                except Exception:
+                    modele = platform.processor()
+        machine = os.uname().nodename if hasattr(os, "uname") else (platform.node() or os.environ.get("COMPUTERNAME", "noeud"))
+        charge = round(os.getloadavg()[0], 2) if hasattr(os, "getloadavg") else 0.0
+        c = {"machine": machine, "gpus": gpus, "cpu_coeurs": os.cpu_count(), "cpu_modele": modele,
              "ram_mo": mem.get("MemTotal"), "ram_libre_mo": mem.get("MemAvailable"),
-             "charge": round(os.getloadavg()[0], 2), "mesure": self.J.maintenant()}
+             "charge": charge, "mesure": self.J.maintenant()}
         self._capacite = (time.time(), c)
         return c
 
@@ -703,7 +730,10 @@ def fabrique(noeud, local):
                 self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; "
                                  "style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                pass
 
         def corps_json(self):
             """Refus AVANT toute lecture : longueur absente, négative, non décimale ou trop grande ; puis lecture exacte."""

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VISION · Portefeuille</title>
+<title>VISION · Portefeuille & Cockpit Studio</title>
 <link rel="icon" href="icone.svg">
 <link rel="stylesheet" href="app.css">
 <script defer src="ruban.js"></script>
@@ -11,7 +11,7 @@
 </head>
 <body>
 <header class="haut">
-  <div class="marque"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Portefeuille</b></span></div>
+  <div class="marque"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Portefeuille</b></span><span class="studio-tag">Cockpit Studio</span></div>
   <nav class="onglets" id="onglets">
     <button data-vue="apercu" class="actif">Vue d'ensemble</button>
     <button data-vue="portefeuille">Portefeuille</button>
@@ -21,7 +21,10 @@
     <button data-vue="blocs">Blocs</button>
     <button data-vue="noeud">Nœud</button>
   </nav>
-  <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION-essai</span></div>
+  <div class="haut-droite">
+    <button class="petit" id="btn-rafraichir" title="Rafraîchir l'état du cockpit">↻ Rafraîchir</button>
+    <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION-essai</span></div>
+  </div>
 </header>
 
 <main>
@@ -137,7 +140,13 @@
   </section>
 
   <section id="vue-blocs" class="vue">
-    <div class="carte"><h2>Explorateur de blocs</h2><div id="blocs"></div></div>
+    <div class="carte">
+      <h2>Explorateur de blocs <span id="blocs-compte" class="badge"></span></h2>
+      <div class="barre-outils">
+        <input id="filtre-blocs" type="search" spellcheck="false" autocomplete="off" placeholder="Filtrer par hauteur (#12), empreinte, type, compte, nœud ou détail…">
+      </div>
+      <div id="blocs"></div>
+    </div>
   </section>
 
   <section id="vue-noeud" class="vue">
