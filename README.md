@@ -1,11 +1,27 @@
+![VISION : le travail d'une machine, vérifié par une autre. Réseau d'essai, unités sans valeur, rien en vente.](docs/images/banniere.png)
+
 # VISION · nœud, portefeuille et partage de puissance (réseau d'essai)
 
 > **Chaîne d'ESSAI.** Les unités n'ont aucune valeur, ne se transfèrent pas d'un compte à l'autre et ne sont ni vendues ni offertes au public.
 
 VISION relie des machines équipées de cartes graphiques pour faire tourner des modèles d'IA en local. Chaque machine installe un **nœud** et son **portefeuille** ; le travail fait par une machine n'est récompensé qu'après avoir été **revérifié par une autre**.
 
-- Site du projet : <https://turbo31150.github.io/vision/>
-- Explorateur de la chaîne (blocs, nœuds, connexion par adresse) : <https://turbo31150.github.io/vision/explorateur/>
+| | |
+|---|---|
+| **Site du projet** | <https://turbo31150.github.io/vision/> |
+| **Explorateur de blocs** (blocs, nœuds, connexion par adresse) | <https://turbo31150.github.io/vision/explorateur/> |
+| **Feuille de route** | <https://turbo31150.github.io/vision/#feuille-de-route> |
+| **Installer un nœud** | [Rejoindre](#rejoindre) |
+| **Vérifier la chaîne soi-même** | [Vérifier sans nous croire](#vérifier-sans-nous-croire) |
+
+**En bref**
+- **Un nœud en un fichier**, sans droits d'administrateur ; deux clés ed25519 créées sur la machine, qui ne la quittent jamais.
+- **Un portefeuille de bureau**, servi uniquement sur la machine (`127.0.0.1`), avec connexion par adresse.
+- **Une chaîne signée, rejouée par chaque nœud** depuis le bloc 0 ; un vérificateur indépendant la rejoue sans le code du nœud.
+- **La puissance mise en commun** : chaque machine annonce ses cartes, sa mémoire et sa charge ; les annonces sont signées puis additionnées.
+- **Une récompense sur preuve** : un travail ne compte qu'avec le reçu signé d'une autre machine. Pour l'instant, les récompenses restent calculées en simulation.
+
+![Capture réelle de l'explorateur VISION sur la chaîne publique vision-essai](docs/images/explorateur.jpg)
 
 ## Ce que contient ce dépôt
 
