@@ -162,7 +162,7 @@ function Principal {
     $n = ArreterNoeud $Code $Prefixe
     try { Unregister-ScheduledTask -TaskName $Tache -Confirm:$false -ErrorAction Stop } catch { }
     foreach ($f in @($Menu, $Bureau, $Demarrage, $FichierOuvreur)) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
-    Remove-Item -LiteralPath $Code -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $Code) { Rename-Item -LiteralPath $Code -NewName ("code.desinstalle-" + (Get-Date -Format 'yyyyMMddHHmmss')) -ErrorAction SilentlyContinue }
     Dire "nœud arrêté ($n processus) et retiré ; clés et chaîne conservées dans $Prefixe (portefeuille\ = votre clé, à garder)"
     exit 0
   }

@@ -66,7 +66,8 @@ if [ "$DESINSTALLER" = 1 ]; then
     systemctl --user daemon-reload 2>/dev/null || true
   fi
   [ -f "$PREFIXE/noeud.pid" ] && kill "$(cat "$PREFIXE/noeud.pid")" 2>/dev/null || true
-  rm -rf "$PREFIXE/code"; rm -f "$PREFIXE/noeud.pid"
+  [ -d "$PREFIXE/code" ] && mv "$PREFIXE/code" "$PREFIXE/code.desinstalle-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+  rm -f "$PREFIXE/noeud.pid"
   dire "nœud arrêté et retiré ; clés et chaîne conservées dans $PREFIXE (portefeuille/ = votre clé, à garder)"
   exit 0
 fi
