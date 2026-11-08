@@ -1,7 +1,7 @@
 # Todolist Projet VISION & Chaîne Multimédia
 
 Mise à jour du 08/11/2026 : chaque case est confrontée à une mesure du jour. Chemins relatifs à `livrables/` sauf mention.
-Versions précédentes conservées : `todolist.md.avant-20261108` (original du 03/11) et `_mis-de-cote-20261108/p0-3-todolist/` (version de 01:38).
+Versions précédentes conservées dans les archives locales de suivi.
 
 - [x] **Sauvegarde SQL des bases locales** : dernier instantané complet `sql_20261107_202705` (sauvegardes SQL locales du producteur, non publiées) = **15 bases `.zst`** (et non 17), `MANIFEST.sha256` vérifié et `zstd -t` 15/15 OK le 08/11. Les instantanés suivants du 07/11 (21:12, 21:57, 22:42) ne contiennent qu'une base chacun. Volet « vectorisation » : non mesuré par cette case.
 - [x] **Coupe de la fin figée de `Capture_video_coupee.mp4`** : exécutée à 348,8 s dans `Capture_video_coupee_348s.mp4` (348,83 s, 29 Mo, plus aucun gel en fin de fichier selon `freezedetect` n=0,003 d=2 ; restent des plans fixes internes de capture d'écran, le plus long 158,7 → 173,5 s, à couper ou non au montage). L'original de 360,02 s est conservé intact.
