@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 *.tmp
 .chrome/
+*.avant-*
+*.mis-de-cote-*
+_mis-de-cote-*/

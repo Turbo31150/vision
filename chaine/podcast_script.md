@@ -1,0 +1,9 @@
+# Script Podcast Alterné Double-Voix — Projet VISION
+# Voix 1 (Présentateur principal) : Introduction et présentation globale du projet VISION (turbo31150/vision)
+# Voix 2 (Contrôleur et vérificateur) : Vérification en temps réel des valeurs, métriques, architecture et correction des écarts avant validation de chaque segment.
+
+[Voix 1] : Bonjour à tous, bienvenue dans ce briefing technique spécial du projet VISION de turbo31150. Aujourd'hui, nous plongeons au cœur de l'architecture sovereign locale pour analyser les livrables, l'automatisation et les performances de notre écosystème multi-nodes.
+[Voix 2] : Attends une seconde, Voix 1. Permets-moi de vérifier immédiatement les métriques locales et les dépôts synchronisés sur le parc pour confirmer ces chiffres avant de passer à la suite. Les registres indiquent 4 nœuds actifs (M0, M3, M4, M6) avec des bases de données SQL3 vectorisées. Je valide les valeurs, c'est exact, on peut continuer.
+[Voix 1] : Merci pour cette vérification rigoureuse. Passons maintenant au module de traitement multimédia : le nettoyage et la coupe de la capture vidéo du 3 novembre 2026, avec suppression de la fin figée, upscaling GPU haute qualité via la station M6 Quadro, et intégration des photos en stock issues du rapport GitHub du projet VISION.
+[Voix 2] : Vérification de la file d'attente VRAM sur M6 et de l'intégrité du fichier cible 'Capture_video_coupee.mp4'. Tout est nominal. Les images de stock et le rapport sont bien en place dans le répertoire des livrables. Je donne le feu vert pour l'assemblage final et la mise à jour de la todolist maître du Cockpit.
+[Voix 1] : Parfait ! Tout est validé à deux voix, en temps réel et en souveraineté locale absolue sans exfiltration. Fin du segment, prêt pour l'exécution finale de la chaîne multimédia.
