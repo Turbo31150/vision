@@ -120,6 +120,65 @@ def budget(k):
     return BUDGET_0 >> (k // 52) if 0 <= k < EPOQUES else 0
 
 
+def independance(contributions):
+    """Aucun nœud ne certifie seul sa récompense (tâche #2034), écrit ici sans reprendre l'outil de chaîne.
+
+    Une validation nomme les auteurs de l'étape qu'elle juge et n'en fait pas partie. Un travail nomme le signataire du
+    journal de sa mission et cite ses reçus : au moins un, tous PASS, d'une autre machine que l'exécutant et le
+    signataire, chacun pour une seule étape, cohérents avec la validation scellée de même empreinte ; un rejeu exact
+    revendiqué exige un reçu de rejeu exact ; un FAIL scellé sur la même étape interdit le paiement.
+    Renvoie l'ensemble des reçus cités."""
+    jugees = {}          # (mission, étape) -> validations scellées dans cette clôture
+    scellees = {}        # empreinte du reçu -> validation
+    for c in contributions:
+        if c.get("role") != "validation":
+            continue
+        a = c.get("auteurs")
+        if not isinstance(a, list) or not a or not all(isinstance(x, str) and NOM.fullmatch(x) for x in a):
+            raise Refus("validation sans auteurs de l'étape jugée")
+        if c.get("noeud") in a:
+            raise Refus("auto-validation : un auteur juge sa propre étape")
+        if c.get("resultat") not in ("PASS", "FAIL"):
+            raise Refus("validation sans résultat PASS ou FAIL")
+        jugees.setdefault((c.get("mission"), c.get("etape")), []).append(c)
+        scellees[c.get("preuve")] = c
+    cites = set()
+    for c in contributions:
+        if c.get("role") != "travail":
+            continue
+        executant, signataire = c.get("noeud"), nom(c.get("signataire"), "signataire du journal de mission")
+        if c.get("garantie") not in POIDS:
+            raise Refus("garantie inconnue")
+        recus = c.get("recus")
+        if not isinstance(recus, list) or not recus:
+            raise Refus("travail sans reçu indépendant : le nœud certifierait seul son étape")
+        exact = False
+        for r in recus:
+            if not isinstance(r, dict) or not isinstance(r.get("preuve"), str) or not HEX64.fullmatch(r["preuve"]) \
+                    or r["preuve"] == c.get("preuve"):
+                raise Refus("reçu cité invalide")
+            if nom(r.get("verificateur"), "vérificateur") in (executant, signataire):
+                raise Refus("reçu non indépendant : donné par l'exécutant ou le signataire de l'étape")
+            if r.get("resultat") != "PASS" or r.get("garantie") not in POIDS:
+                raise Refus("reçu cité qui n'est pas un PASS")
+            if r["preuve"] in cites:
+                raise Refus("un même reçu paie deux étapes")
+            cites.add(r["preuve"])
+            v = scellees.get(r["preuve"])
+            if v is not None and (v.get("noeud"), v.get("resultat"), v.get("mission"), v.get("etape")) != (
+                    r["verificateur"], "PASS", c.get("mission"), c.get("etape")):
+                raise Refus("reçu cité différent de la validation scellée")
+            exact = exact or r["garantie"] == "rejeu-exact"
+        if c["garantie"] == "rejeu-exact" and not exact:
+            raise Refus("rejeu exact revendiqué sans reçu de rejeu exact")
+        for v in jugees.get((c.get("mission"), c.get("etape")), []):
+            if executant not in v["auteurs"] or signataire not in v["auteurs"]:
+                raise Refus("auteurs de l'étape différents entre travail et validation")
+            if v["resultat"] == "FAIL":
+                raise Refus("étape payée malgré un reçu FAIL scellé")
+    return cites
+
+
 class Registre:
     """L'état rejoué : soldes, et tout ce qui ne peut servir qu'une fois."""
 
@@ -132,6 +191,7 @@ class Registre:
         self.consommees, self.seqs, self.espace = set(), set(), ESPACE_TX
         self.conso = {}
         self.epoques, self.premiere = [], 0
+        self.appuis = set()      # reçus déjà cités pour payer une étape : un reçu ne paie qu'une fois
 
     def retirer(self, compte, n):
         if compte.startswith("reserve:") and compte != RESERVE:
@@ -319,6 +379,9 @@ class Registre:
                 raise Refus("contribution en double ou hors époque")
             vus.add((c["role"], p))
             scores[c["noeud"]] = scores.get(c["noeud"], 0) + pts
+        appuis = independance(tx.get("contributions", []))
+        if appuis & self.appuis:
+            raise Refus("reçu déjà cité pour payer une autre étape")
         justifie = sum(scores.values())
         plafond = min(tx["budget"], justifie, self.soldes.get(RESERVE, 0))
         parts = {n: s * plafond // justifie for n, s in scores.items()} if justifie else {}
@@ -332,6 +395,7 @@ class Registre:
             self.ajouter("noeud:" + n, u)
         for role, p in vus:
             (self.payes if role == "travail" else self.recus_payes).add(p)
+        self.appuis |= appuis
         self.epoques.append(k)
 
 

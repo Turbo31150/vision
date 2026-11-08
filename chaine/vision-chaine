@@ -9,6 +9,8 @@ Une chaîne à autorité (un producteur signe, des témoins peuvent cosigner) qu
                 qui a fait le calcul, ou retournent à la réserve usage si aucun nœud n'est nommé ;
   * récompense: partage de puissance ; une étape de mission VISION exécutée par une machine et validée par un
                 reçu PASS indépendant (sans FAIL) rapporte 1 unité par seconde de calcul, une seule fois ;
+                aucun nœud ne certifie seul sa récompense : la clôture d'époque cite ses reçus, et tout pair et
+                tout témoin refuse un travail sans reçu d'une autre machine ou une validation par un auteur ;
   * aucune frappe, aucun transfert entre comptes, aucun retrait vers l'extérieur.
 
 Chaque bloc : hauteur, empreinte du précédent (le bloc 0 pour le bloc 1), racine de Merkle des transactions,
@@ -70,6 +72,11 @@ TAUX_SECONDE = 1                     # récompense : unités par seconde de calc
 #   validation : 1 point par reçu PASS ou FAIL signé → au nœud qui a vérifié (INCONCLUSIVE ne paie rien).
 # Parts au prorata des points ; le reliquat d'arrondi et le budget non justifié restent dans la réserve (pas
 # d'« Arbitrator »). Les dépenses ne paient plus un nœud directement : 20 % détruits, 80 % recyclés dans la réserve.
+# Aucun nœud ne certifie seul sa récompense (tâche #2034, DEC-03) : la clôture d'époque porte ses justificatifs et
+# tout pair, tout témoin les rejoue (`controler_independance`) — chaque travail cite au moins un reçu PASS d'une autre
+# machine que l'exécutant et que le signataire du journal de mission, un reçu ne paie qu'une étape, un rejeu exact
+# revendiqué exige un reçu de rejeu exact, une validation ne vient jamais d'un auteur de l'étape, un FAIL scellé bloque
+# l'étape. Là où le journal VISION signé est présent, chaque reçu cité y est en plus retrouvé (`controler_recus_journal`).
 EPOQUE_0 = datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)   # mercredi 12:00 UTC
 EPOQUE_S = 7 * 24 * 3600
 EPOQUES_TOTAL = 208                  # 4 ans d'époques hebdomadaires
@@ -482,6 +489,10 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False, hauteur=None):
             if not debut <= str(c.get("horodatage", "")) < fin:
                 raise Refus(f"contribution hors de l'époque {k} : {p[:12]}…")
             vus.add(cle_p)
+        appuis = controler_independance(tx.get("contributions", []), nom)
+        deja_cites = sorted(a for a in appuis if a in preuves)
+        if deja_cites:
+            raise Refus(f"reçu déjà cité pour payer une autre étape : {deja_cites[0][6:18]}…")
         r = repartir(tx.get("contributions", []), tx["budget"], soldes.get("reserve:usage", 0))
         if {k2: tx.get(k2) for k2 in r} != r:
             raise Refus("répartition d'époque différente du recalcul")
@@ -489,6 +500,7 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False, hauteur=None):
         for noeud_, u in r["attributions"].items():
             crediter("noeud:" + noeud_, u)
         preuves.update(vus)
+        preuves.update(appuis)
         preuves.add(f"epoque:{k}")
     elif t == "cle_producteur":
         # sans effet sur les soldes : `rejouer` contrôle la preuve et suit la clé à partir du bloc suivant
@@ -501,6 +513,111 @@ def appliquer(soldes, tx, bloc0, preuves, gele=False, hauteur=None):
     preuves.add(cle_reg)
     if cle_seq:
         preuves.add(cle_seq)
+
+
+def controler_independance(contributions, nom=None):
+    """Règle « aucun nœud ne certifie seul sa récompense » (tâche #2034), rejouée par tout pair et tout témoin à partir
+    de la seule transaction d'époque. Lève Refus ; renvoie les reçus cités (« appui:<empreinte> »), à ne citer qu'une
+    fois dans toute la chaîne."""
+    def nom_(x, quoi):
+        if not isinstance(x, str) or not NOM.fullmatch(x):
+            raise Refus(f"{quoi} invalide : {x!r}")
+        return x
+    nom = nom or nom_
+    hexa = lambda p: isinstance(p, str) and re.fullmatch(r"[0-9a-f]{64}", p) is not None  # noqa: E731
+    travaux = [c for c in contributions if c.get("role") == "travail"]
+    validations = [c for c in contributions if c.get("role") == "validation"]
+    par_preuve = {c.get("preuve"): c for c in validations}
+    appuis = set()
+    for c in validations:
+        auteurs_ = c.get("auteurs")
+        if not isinstance(auteurs_, list) or not auteurs_:
+            raise Refus(f"validation sans auteurs de l'étape jugée : {str(c.get('preuve'))[:12]}…")
+        for x in auteurs_:
+            nom(x, "auteur d'étape")
+        if c["noeud"] in auteurs_:
+            raise Refus(f"auto-validation : {c['noeud']} juge une étape dont il est l'auteur "
+                        f"({c.get('mission')}/{c.get('etape')})")
+        if c.get("resultat") not in ("PASS", "FAIL"):
+            raise Refus(f"validation sans résultat PASS ou FAIL : {str(c.get('preuve'))[:12]}…")
+    for c in travaux:
+        p, noeud = c.get("preuve"), c["noeud"]
+        signataire = nom(c.get("signataire"), "signataire du journal de mission")
+        if c.get("garantie") not in POIDS_GARANTIE:
+            raise Refus(f"garantie inconnue : {c.get('garantie')!r}")
+        recus = c.get("recus")
+        if not isinstance(recus, list) or not recus:
+            raise Refus(f"travail sans reçu indépendant : {noeud} certifierait seul l'étape {str(p)[:12]}…")
+        for r in recus:
+            if not isinstance(r, dict) or not hexa(r.get("preuve")) or r["preuve"] == p:
+                raise Refus(f"reçu cité invalide pour l'étape {str(p)[:12]}…")
+            v = nom(r.get("verificateur"), "vérificateur")
+            if v in (noeud, signataire):
+                raise Refus(f"reçu non indépendant : {v} est l'exécutant ou le signataire de l'étape {str(p)[:12]}…")
+            if r.get("resultat") != "PASS" or r.get("garantie") not in POIDS_GARANTIE:
+                raise Refus(f"reçu cité qui n'est pas un PASS : {r['preuve'][:12]}…")
+            a = "appui:" + r["preuve"]
+            if a in appuis:
+                raise Refus(f"un même reçu paie deux étapes : {r['preuve'][:12]}…")
+            appuis.add(a)
+            scelle = par_preuve.get(r["preuve"])
+            if scelle is not None and (scelle["noeud"] != v or scelle.get("resultat") != "PASS"
+                                       or (scelle.get("mission"), scelle.get("etape")) != (c.get("mission"), c.get("etape"))):
+                raise Refus(f"reçu cité différent de la validation scellée : {r['preuve'][:12]}…")
+        if c["garantie"] == "rejeu-exact" and not any(r["garantie"] == "rejeu-exact" for r in recus):
+            raise Refus(f"rejeu exact revendiqué sans reçu de rejeu exact : {str(p)[:12]}…")
+        for v in validations:
+            if (v.get("mission"), v.get("etape")) == (c.get("mission"), c.get("etape")):
+                if not {noeud, signataire} <= set(v["auteurs"]):
+                    raise Refus(f"auteurs de l'étape {str(p)[:12]}… différents entre travail et validation")
+                if v["resultat"] == "FAIL":
+                    raise Refus(f"étape payée malgré un reçu FAIL scellé : {str(p)[:12]}…")
+    return appuis
+
+
+def controler_recus_journal(contributions, vision=VISION):
+    """Contrôle d'une clôture contre le journal VISION signé : chaque travail est une étape signée (même exécutant, même
+    signataire), chaque reçu cité ou payé y est signé par le vérificateur nommé, avec ce résultat, pour cette étape, et
+    les auteurs déclarés d'une étape jugée sont ceux du journal. Renvoie la liste des écarts ; None sans journal."""
+    if verificateur_vision(vision) is None:
+        return None
+    signes = {x["preuve"]: x for x in recus_signes(vision)}
+    etapes, auteurs_ = {}, {}
+    for mission, env in etapes_signees(vision):
+        e = env["evenement"]
+        etapes[env.get("empreinte")] = (mission, e)
+        auteurs_.setdefault((mission, e.get("sujet")), set()).update(x for x in auteurs(e) if x)
+    ecarts = []
+    for c in contributions:
+        if c.get("role") == "validation":
+            x = signes.get(c.get("preuve"))
+            if x is None:
+                ecarts.append(f"validation {str(c.get('preuve'))[:12]}… absente du journal signé")
+            elif (x["verificateur"], x["resultat"], x["mission"], x["etape"]) != (
+                    c.get("noeud"), c.get("resultat"), c.get("mission"), c.get("etape")):
+                ecarts.append(f"validation {c['preuve'][:12]}… différente du journal signé")
+            elif sorted(auteurs_.get((x["mission"], x["etape"]), ())) != sorted(c.get("auteurs") or []):
+                ecarts.append(f"validation {c['preuve'][:12]}… : auteurs de l'étape différents du journal signé")
+            continue
+        if c.get("role") != "travail":
+            continue
+        m_e = etapes.get(c.get("preuve"))
+        if m_e is None:
+            ecarts.append(f"travail {str(c.get('preuve'))[:12]}… : étape absente du journal signé")
+        else:
+            mission, e = m_e
+            if ((e.get("donnees") or {}).get("machine"), e.get("machine"), mission, e.get("sujet")) != (
+                    c.get("noeud"), c.get("signataire"), c.get("mission"), c.get("etape")):
+                ecarts.append(f"travail {c['preuve'][:12]}… différent de l'étape signée")
+        for r in c.get("recus") or []:
+            x = signes.get(r.get("preuve"))
+            if x is None:
+                ecarts.append(f"reçu {str(r.get('preuve'))[:12]}… absent du journal signé (étape {str(c.get('preuve'))[:12]}…)")
+            elif (x["verificateur"], x["resultat"], x["mission"], x["etape"]) != (
+                    r.get("verificateur"), r.get("resultat"), c.get("mission"), c.get("etape")):
+                ecarts.append(f"reçu {r['preuve'][:12]}… différent du journal signé "
+                              f"({x['verificateur']} {x['resultat']} {x['mission']}/{x['etape']})")
+    return ecarts
 
 
 def message_cle(ancienne, nouvelle, horodatage):
@@ -761,10 +878,15 @@ def etapes_validees(vision=VISION):
         if d.get("machine") and env.get("empreinte") and any(x["resultat"] == "PASS" for x in libres) \
                 and not any(x["resultat"] == "FAIL" for x in lus):
             forte = any(x["resultat"] == "PASS" and x["garantie"] == "rejeu-exact" for x in libres)
+            recus_ = sorted(({"preuve": x["preuve"], "verificateur": x["verificateur"], "resultat": "PASS",
+                              "garantie": x["garantie"] if x["garantie"] in POIDS_GARANTIE else "proprietes"}
+                             for x in libres if x["resultat"] == "PASS" and x["preuve"]),
+                            key=lambda r: r["preuve"])
             sortie.append({"mission": mission, "etape": e.get("sujet"), "noeud": d["machine"],
                            "voie": d.get("voie"), "duree_ms": int(d.get("duree_ms") or 0),
                            "preuve": env["empreinte"], "horodatage": e.get("horodatage"),
-                           "garantie": "rejeu-exact" if forte else "proprietes"})
+                           "garantie": "rejeu-exact" if forte else "proprietes",
+                           "signataire": e.get("machine"), "recus": recus_})
     return sortie
 
 
@@ -773,13 +895,16 @@ def contributions_epoque(k, preuves, vision=VISION):
     debut, fin = fenetre(k)
     dedans = lambda h: isinstance(h, str) and debut <= h < fin  # noqa: E731
     cs = [{"role": "travail", "noeud": e["noeud"], "preuve": e["preuve"], "horodatage": e["horodatage"],
-           "duree_ms": e["duree_ms"], "garantie": e["garantie"], "mission": e["mission"], "etape": e["etape"]}
+           "duree_ms": e["duree_ms"], "garantie": e["garantie"], "mission": e["mission"], "etape": e["etape"],
+           "signataire": e["signataire"], "recus": [r for r in e["recus"] if "appui:" + r["preuve"] not in preuves]}
           for e in etapes_validees(vision) if dedans(e["horodatage"]) and e["preuve"] not in preuves]
+    cs = [c for c in cs if c["recus"]]
     exclus = {}
     for mission, env in etapes_signees(vision):
         exclus.setdefault((mission, env["evenement"].get("sujet")), set()).update(auteurs(env["evenement"]))
     cs += [{"role": "validation", "noeud": r["verificateur"], "preuve": r["preuve"], "horodatage": r["horodatage"],
-            "resultat": r["resultat"], "mission": r["mission"], "etape": r["etape"]}
+            "resultat": r["resultat"], "mission": r["mission"], "etape": r["etape"],
+            "auteurs": sorted(x for x in exclus[(r["mission"], r["etape"])] if x)}
            for r in recus_signes(vision) if r["resultat"] in ("PASS", "FAIL") and r["preuve"] and r["verificateur"]
            and r["verificateur"] not in exclus.get((r["mission"], r["etape"]), {r["verificateur"]})
            and dedans(r["horodatage"]) and "recu:" + r["preuve"] not in preuves]
@@ -889,6 +1014,9 @@ def cmd_epoque(a):
             print(f"rien à clore : époque {k} pas encore terminée (fin {tx['fin']})")
             return
         while maintenant() >= tx["fin"]:   # toutes les époques terminées, dans l'ordre, aucune sautée
+            ecarts = controler_recus_journal(tx["contributions"])
+            if ecarts:
+                raise Refus(f"clôture {tx['numero']} : {len(ecarts)} justificatif(s) hors du journal signé ({ecarts[0]})")
             t = mettre_en_attente(tx)
             print(f"clôture d'époque {tx['numero']} en attente : émis {tx['emis']} · {t['id'][:12]}…")
             s, p = etat_avec_attente()
@@ -938,6 +1066,22 @@ def cmd_verifier(a):
           f"{sum(len(b['transactions']) for b in blocs)} transaction(s), offre conservée "
           f"{sum(soldes.values()):_} = {bloc0['offre_totale']:_}, détruit {soldes.get('detruit', 0)} ; "
           f"tête cosignée par {', '.join(sorted(c['machine'] for c in cos)) or 'aucun témoin'}".replace("_", " "))
+    print(ligne_justificatifs(blocs))
+
+
+def ligne_justificatifs(blocs, vision=VISION):
+    """Rejoue les justificatifs des clôtures scellées contre le journal VISION signé, s'il est là. Lève Refus sur écart."""
+    clotures = [tx for b in blocs for tx in b["transactions"] if tx.get("type") == "epoque"]
+    n = sum(len(tx.get("contributions", [])) for tx in clotures)
+    if verificateur_vision(vision) is None:
+        return (f"justificatifs : {len(clotures)} clôture(s) d'époque, règle d'indépendance rejouée ; "
+                f"journal VISION absent ({vision}), reçus non confrontés au journal signé")
+    for tx in clotures:
+        ecarts = controler_recus_journal(tx.get("contributions", []), vision)
+        if ecarts:
+            raise Refus(f"clôture {tx.get('numero')} : {len(ecarts)} justificatif(s) hors du journal signé ({ecarts[0]})")
+    return (f"justificatifs : {len(clotures)} clôture(s) d'époque, {n} contribution(s), toutes retrouvées dans le "
+            f"journal VISION signé ({vision})")
 
 
 def cmd_soldes(a):
@@ -1039,6 +1183,7 @@ def cmd_cosigner(a):
     if ancre.exists() and ancre.read_text().strip() != bloc0["empreinte"]:
         raise Refus("bloc 0 différent de celui épinglé par ce témoin")
     soldes, _ = rejouer(blocs, bloc0, pub)
+    controle = ligne_justificatifs(blocs)
     histo = d / "tetes.jsonl"
     for t in lire_jsonl(histo):   # pas de retour en arrière ni de vue divergente
         if t["hauteur"] <= len(blocs) and blocs[t["hauteur"] - 1]["empreinte"] != t["empreinte"]:
@@ -1051,7 +1196,8 @@ def cmd_cosigner(a):
     sig = signer(f"{tete['hauteur']}:{tete['empreinte']}", d / f"{machine}_vision_ed25519", ESPACE_COSIGN)
     print(canon({"machine": machine, "hauteur": tete["hauteur"], "empreinte": tete["empreinte"], "signature": sig,
                  "horodatage": maintenant(),
-                 "soldes_controle": f"offre conservée {sum(soldes.values())}, détruit {soldes.get('detruit', 0)}"}))
+                 "soldes_controle": f"offre conservée {sum(soldes.values())}, détruit {soldes.get('detruit', 0)}",
+                 "justificatifs": controle}))
 
 
 def main():
