@@ -110,7 +110,7 @@
       <p class="chapeau">Les cartes publiées le 2 novembre, mises à jour : chiffres mesurés ce jour-là sur nos machines, captures sans retouche.</p>
       <ul class="galerie">
         <li><a href="images/visuels/01-verifier.jpg"><img src="images/visuels/01-verifier.jpg" alt="Chaque action importante se vérifie sur une autre machine." width="900" height="900" loading="lazy"></a></li>
-        <li><a href="images/visuels/02-parc.jpg"><img src="images/visuels/02-parc.jpg" alt="Le parc : 3 machines, 6 cartes graphiques et 48 Go de mémoire graphique, à la même hauteur de chaîne. Capture du cockpit." width="900" height="900" loading="lazy"></a></li>
+        <li><a href="images/visuels/02-parc.jpg"><img src="images/visuels/02-parc.jpg" alt="Le parc, capture du cockpit le 2 novembre sur la chaîne d'essai interne : 3 machines, 6 cartes graphiques et 48 Go de mémoire graphique, à la même hauteur de chaîne. L'état publié de la chaîne publique (chaine/etat.json, 2 novembre à 22 h 05 UTC) compte 2 machines en ligne, 4 cartes graphiques et 36 Go." width="900" height="900" loading="lazy"></a></li>
         <li><a href="images/visuels/03-preuve.jpg"><img src="images/visuels/03-preuve.jpg" alt="La preuve plutôt que la promesse : 389 tests sur 389, 15 contrôles sur les vraies données, journaux copiés sur 3 témoins." width="900" height="900" loading="lazy"></a></li>
         <li><a href="images/visuels/04-noeud.jpg"><img src="images/visuels/04-noeud.jpg" alt="Le nœud : un fichier, deux clés créées et gardées sur la machine, la chaîne rejouée depuis le bloc 0." width="900" height="900" loading="lazy"></a></li>
         <li><a href="images/visuels/05-tourne.jpg"><img src="images/visuels/05-tourne.jpg" alt="Ce qui tourne déjà, en réseau d'essai, sur nos machines." width="900" height="900" loading="lazy"></a></li>
@@ -244,12 +244,12 @@ python3 outils/verifier-chaine docs/chaine --cle-origine "ssh-ed25519 AAAA…"</
           <div class="quand"><span class="date">Phase 1, 2 novembre 2026</span><span class="statut">Fait</span></div>
           <h3>La chaîne d'essai</h3>
           <ul>
-            <li>Une chaîne d'essai interne : le bloc 0, encore à l'état de brouillon, puis 14 blocs signés le 2 novembre.</li>
+            <li>Une chaîne d'essai interne, non publiée : le bloc 0, encore à l'état de brouillon, puis des blocs signés le 2 novembre.</li>
             <li>Des dépenses signées par les portefeuilles, dont 20 % sont détruits.</li>
             <li>Des forfaits d'essai, sans aucune somme encaissée.</li>
-            <li>Les règles de récompense par époque, entrées en vigueur au bloc 7 ; une clé dédiée à la signature des blocs, déclarée au bloc 13.</li>
-            <li>Une chaîne publique propre, vision-essai, repartie de zéro, sans répartition ni prix : c'est elle que montre l'explorateur.</li>
-            <li>Le 2 novembre au soir, 30 000 unités d'essai créditées par trois factures d'essai (ESSAI-…) sur les portefeuilles de trois machines de test, pour essayer l'usage. Sans valeur, non transférables, visibles dans l'explorateur au bloc 3.</li>
+            <li>Les règles de récompense par époque et une clé dédiée à la signature des blocs, mises au point sur cette chaîne interne.</li>
+            <li>Une chaîne publique propre, vision-essai, repartie de zéro, sans répartition ni prix : c'est elle que montre l'explorateur. Après le bloc 0, elle compte 5 blocs signés le 2 novembre ; les règles de récompense par époque y sont inscrites au bloc 2.</li>
+            <li>Le 2 novembre au soir, 50 000 unités d'essai créditées par cinq factures d'essai (ESSAI-…) sur les portefeuilles de cinq machines de test, pour essayer l'usage. Sans valeur, non transférables, visibles dans l'explorateur aux blocs 3 à 5.</li>
           </ul>
           <p class="preuve"><a href="explorateur/">Voir la chaîne publique dans l'explorateur</a></p>
         </li>
