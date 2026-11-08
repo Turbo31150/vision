@@ -168,7 +168,7 @@
     const pct = tFin > tDebut ? Math.max(0, Math.min(100, Math.round(((tNow - tDebut) / (tFin - tDebut)) * 100))) : 100;
     const j = Math.floor(reste / 864e5), h = Math.floor((reste % 864e5) / 36e5);
     $('epoque-badge').textContent = `n° ${c.numero} · ${reste ? `fin dans ${j} j ${h} h (${pct} %)` : 'terminée, clôture au prochain passage'}`;
-    const lignes = [['Fenêtre', `${heure(c.debut)} → ${heure(c.fin)}`], ['Budget de l’époque', `${fr.format(c.budget)} (divisé par deux chaque année)`],
+    const lignes = [['Fenêtre', `${heure(c.debut)} → ${heure(c.fin)}`], ['Budget de l’époque', fr.format(c.budget)],
       ['Règles', c.regles_v2 ? 'v2 : rétribution par époque' : 'v1 : récompense immédiate (v2 pas encore active)']];
     if (c.justifie != null) lignes.push(['Points justifiés à ce jour', fr.format(c.justifie)], ['Émission projetée', fr.format(c.emis_projete)]);
     if (c.erreur) lignes.push(['Projection', c.erreur]);
