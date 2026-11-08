@@ -38,6 +38,9 @@ VISION relie des machines équipées de cartes graphiques pour faire tourner des
 | `installateur/` | Les modèles des installateurs (bash : Linux, macOS, Android ; PowerShell : Windows) et leur constructeur reproductible |
 | `outils/exporter-chaine-publique` | Ce que le nœud producteur publie dans `docs/chaine/` (le miroir) |
 | `docs/` | Le site du projet, la page Installer, l'explorateur, le miroir de la chaîne et les installateurs |
+| `livre/` | Deux récits de fiction (`00`, `01`, tous droits réservés), l'engagement du fondateur (`02`, pas encore vrai : 8 conditions, aucune n'est cochée) et l'annexe qui sépare le mesuré de l'annoncé (`03`) |
+
+[`livre/02-ENGAGEMENT-VISION-LIBRE.md`](livre/02-ENGAGEMENT-VISION-LIBRE.md) et [`livre/03-CE-QUI-EST-VRAI.md`](livre/03-CE-QUI-EST-VRAI.md) sont des textes du projet, publiés et assumés. Les sources qu'ils citent comme « mémoire » ou qu'ils marquent « non publié » sont des documents internes absents de ce dépôt : on ne peut pas les vérifier ici. Sommaire du dossier : [`livre/LISEZMOI.md`](livre/LISEZMOI.md).
 
 ## Vérifier sans nous croire
 
