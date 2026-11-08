@@ -67,8 +67,8 @@
         <ol class="circuit">
           <li><b>Forfait d’essai</b> : il crédite des unités d’usage non cessibles, prises sur la réserve « usage ». Pendant l’essai, rien n’est vendu ni encaissé.</li>
           <li><b>Utilisation</b> : un service rendu par le réseau (une réponse d’un modèle, une lecture d’image) se règle par une dépense signée.</li>
-          <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve qui paie les époques.</li>
-          <li><b>Partage de puissance</b> : à chaque fin d’époque (mercredi 12:00 UTC<span id="p-heure-locale"></span>), le budget de la semaine est partagé au prorata des points : travail validé par un reçu indépendant (secondes de calcul × 2 si rejeu exact) et validations signées. Le budget est divisé par deux chaque année, sur 4 ans.</li>
+          <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve d’usage ; aucune part ne va à un autre compte.</li>
+          <li><b>Points de travail</b> : à chaque fin d’époque (mercredi 12:00 UTC<span id="p-heure-locale"></span>), le budget de la semaine se répartit en points entre le travail rejoué par une autre machine (secondes de calcul, × 2 si le résultat est retrouvé à l’identique) et les vérifications signées. Le budget est fictif, non convertible et ne donne droit à aucun paiement ; pour l’instant, ce calcul reste une simulation.</li>
           <li><b>Aucun transfert</b> entre comptes, aucune frappe : l’offre ne fait que décroître.</li>
         </ol>
       </section>
@@ -156,7 +156,7 @@
     <div id="compte" hidden>
       <div class="grille-kpi kpi-compte" id="kpis-compte"></div>
       <div class="deux">
-        <section class="panneau"><h2>Abonnement et forfaits</h2><div id="compte-forfaits" class="defile"></div></section>
+        <section class="panneau"><h2>Forfaits d’essai</h2><div id="compte-forfaits" class="defile"></div></section>
         <section class="panneau"><h2>Nœuds et matériel partagé</h2><div id="compte-noeuds" class="defile"></div></section>
       </div>
       <section class="panneau"><h2>Opérations sur la chaîne</h2><p class="note sous-titre">Chaque ligne est inscrite dans un bloc de la chaîne : elle ne peut plus être effacée.</p><div id="compte-historique" class="defile releve"></div></section>
@@ -191,7 +191,7 @@
         <div id="message-inscription" class="message" role="status" aria-live="polite" hidden></div>
       </section>
       <section class="panneau">
-        <h2>Gains du nœud <span id="solde-noeud" class="badge"></span></h2>
+        <h2>Unités reçues par le nœud <span id="solde-noeud" class="badge"></span></h2>
         <div id="gains" class="defile gains"></div>
       </section>
     </div>

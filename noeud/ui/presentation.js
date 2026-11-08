@@ -177,7 +177,7 @@
     plus.classList.toggle('actif', dansTiroir);
     const nom = dansTiroir ? actif.querySelector('.lib-court').textContent : 'Plus';
     ecrire(plus.querySelector('.lib-autres'), nom);
-    plus.setAttribute('aria-label', dansTiroir ? `${nom}, section ouverte : autres sections` : 'Plus : Réseau, Blocs, Nœud');
+    plus.setAttribute('aria-label', dansTiroir ? `${nom}, section ouverte : autres sections` : 'Plus : Réseau, Blocs, Nœud, Assistant');
   }
   plus.addEventListener('click', () => {
     const ouvert = !barre.classList.contains('tiroir-ouvert');

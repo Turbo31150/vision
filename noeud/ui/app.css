@@ -745,6 +745,9 @@ progress.jauge::-moz-progress-bar { background: var(--sarcelle); border-radius: 
 .filtre-blocs > span { flex: none; font-size: 14px; color: var(--texte-2); }
 .filtre-blocs input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--bord-fort); background: var(--surface); color: var(--texte); }
 .filtre-blocs input:focus-visible { border-color: var(--accent); }
+/* répartition 20/80 de la feuille Dépenser : vision-noeud ne pose plus de largeur en ligne (CSP) */
+.repartition .d { width: 20%; }
+.repartition .n { width: 80%; }
 .lib-champ { display: block; margin: 10px 0 6px; font-weight: 600; }
 #assistant-question { width: 100%; box-sizing: border-box; resize: vertical; min-height: 88px; }
 .actions-assistant { align-items: center; }
