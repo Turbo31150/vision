@@ -214,3 +214,14 @@ La porte n'est pas ouverte au public.
 - **Conditionnel** : un usage réel ne s'envisage que si les conditions réglementaires sont réunies et prouvées. D'ici là, rien n'est en vente.
 
 Les critiques et les questions sont bienvenues : ouvrez un ticket.
+
+## Licence
+
+Ce dépôt est publié sous licence MIT, sauf les exceptions ci-dessous : texte officiel dans [`LICENSE`](LICENSE). Chacun peut utiliser, copier, modifier et redistribuer le code, et en tirer une fourche (fork), sans demander de permission ; seule condition : conserver la mention de copyright et le texte de la licence. Pour le code, cela répond à l'une des deux voies de la condition « Dépôt et nom de domaine transférés à une structure à gouvernance partagée, ou rendus forkables sans permission » de [`livre/02-ENGAGEMENT-VISION-LIBRE.md`](livre/02-ENGAGEMENT-VISION-LIBRE.md). Cette case n'y est pas cochée, et les autres conditions de l'engagement restent à remplir.
+
+Exceptions :
+
+- les polices de [`docs/polices/`](docs/polices/) restent sous l'Ubuntu Font Licence 1.0 ([`LICENCE-UBUNTU-FONT.txt`](docs/polices/LICENCE-UBUNTU-FONT.txt)) ;
+- les deux récits de `livre/`, [`00-LE-CODE-DE-PAPA.txt`](livre/00-LE-CODE-DE-PAPA.txt) et [`01-OMBRE-ET-LUMIERE.txt`](livre/01-OMBRE-ET-LUMIERE.txt), ne sont pas sous licence MIT : tous droits réservés.
+
+La licence porte sur le logiciel. Elle ne donne aucune valeur aux unités du réseau d'essai, qui restent sans valeur et non vendues.
