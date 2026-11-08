@@ -2,191 +2,267 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VISION · Portefeuille & Cockpit Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#EDF1F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1424" media="(prefers-color-scheme: dark)">
+<title>VISION, portefeuille d’essai</title>
 <link rel="icon" href="icone.svg">
 <link rel="stylesheet" href="app.css">
 <script defer src="ruban.js"></script>
 <script defer src="app.js"></script>
+<script defer src="qr.js"></script>
+<script defer src="presentation.js"></script>
 </head>
 <body>
-<header class="haut">
-  <div class="marque"><img src="icone.svg" alt="" width="26" height="26"><span>VISION <b>Portefeuille</b></span><span class="studio-tag">Cockpit Studio</span></div>
-  <nav class="onglets" id="onglets">
-    <button data-vue="apercu" class="actif">Vue d'ensemble</button>
-    <button data-vue="portefeuille">Portefeuille</button>
-    <button data-vue="compte">Mon compte</button>
-    <button data-vue="puissance">Partage de puissance</button>
-    <button data-vue="reseau">Réseau</button>
-    <button data-vue="blocs">Blocs</button>
-    <button data-vue="noeud">Nœud</button>
-    <button data-vue="assistant">Assistant</button>
-  </nav>
-  <div class="haut-droite">
-    <button class="petit" id="btn-rafraichir" title="Rafraîchir l'état du cockpit">↻ Rafraîchir</button>
-    <div class="reseau"><span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION-essai</span></div>
+<a class="evitement" href="#contenu">Aller au contenu</a>
+
+<header class="haut" id="haut">
+  <div class="marque"><img src="icone.svg" alt="" width="28" height="28"><span class="marque-nom">VISION</span><span class="marque-sous">Portefeuille</span></div>
+  <div class="reseau" title="État de la synchronisation de ce nœud">
+    <span class="pastille" id="pastille-reseau"></span><span id="nom-reseau">VISION-essai</span><span class="reseau-etat" id="poche-etat"></span><span class="reseau-age" id="poche-age"></span>
   </div>
+  <p class="bandeau-essai" id="bandeau-essai"><span class="bandeau-marque" aria-hidden="true">Essai</span><span>Réseau d’essai VISION — unités d’essai sans valeur, rien en vente</span></p>
 </header>
 
-<main>
-  <div class="bandeau-essai">Réseau d'essai : les unités VISION-essai n'ont aucune valeur, ne se transfèrent pas et ne sont ni vendues ni offertes au public.</div>
-
-  <section id="vue-apercu" class="vue actif">
-    <div class="grille-kpi" id="kpis"></div>
-    <div class="carte">
-      <h2>La chaîne, bloc par bloc</h2>
-      <div class="ruban" id="ruban-apercu" role="list" aria-label="Derniers blocs de la chaîne"></div>
-      <div class="legende-ruban" id="legende-apercu"></div>
+<nav class="barre" aria-label="Navigation du portefeuille">
+  <div class="onglets" id="onglets" role="tablist" aria-label="Sections du portefeuille">
+    <button type="button" role="tab" id="onglet-apercu" aria-controls="vue-apercu" aria-selected="true" data-vue="apercu" class="actif"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><span class="lib-long">Vue d’ensemble</span><span class="lib-court">Accueil</span></button>
+    <button type="button" role="tab" id="onglet-portefeuille" aria-controls="vue-portefeuille" aria-selected="false" tabindex="-1" data-vue="portefeuille"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><path d="M15 6.5v2M15 11v2M15 15.5v2"/></svg><span class="lib-long">Portefeuille</span><span class="lib-court">Portefeuille</span></button>
+    <button type="button" role="tab" id="onglet-compte" aria-controls="vue-compte" aria-selected="false" tabindex="-1" data-vue="compte"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg><span class="lib-long">Mon compte</span><span class="lib-court">Compte</span></button>
+    <button type="button" role="tab" id="onglet-puissance" aria-controls="vue-puissance" aria-selected="false" tabindex="-1" data-vue="puissance"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg><span class="lib-long">Partage de puissance</span><span class="lib-court">Puissance</span></button>
+    <div class="tiroir" id="tiroir" role="presentation">
+      <button type="button" role="tab" id="onglet-reseau" aria-controls="vue-reseau" aria-selected="false" tabindex="-1" data-vue="reseau"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5.5" cy="6" r="2.2"/><circle cx="18.5" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.7 6h8.6M6.6 8l4.3 8M17.4 8l-4.3 8"/></svg><span class="lib-long">Réseau</span><span class="lib-court">Réseau</span></button>
+      <button type="button" role="tab" id="onglet-blocs" aria-controls="vue-blocs" aria-selected="false" tabindex="-1" data-vue="blocs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="8" width="7" height="8" rx="1.6"/><rect x="14.5" y="8" width="7" height="8" rx="1.6"/><path d="M9.5 12h5"/></svg><span class="lib-long">Blocs</span><span class="lib-court">Blocs</span></button>
+      <button type="button" role="tab" id="onglet-noeud" aria-controls="vue-noeud" aria-selected="false" tabindex="-1" data-vue="noeud"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></svg><span class="lib-long">Nœud</span><span class="lib-court">Nœud</span></button>
+      <button type="button" role="tab" id="onglet-assistant" aria-controls="vue-assistant" aria-selected="false" tabindex="-1" data-vue="assistant"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V16.5h-1A1.5 1.5 0 0 1 3 15V7a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M8 10h8M8 13h5"/></svg><span class="lib-long">Assistant</span><span class="lib-court">Assistant</span></button>
     </div>
+  </div>
+  <button type="button" class="autres" id="btn-autres" aria-expanded="false" aria-controls="tiroir"><svg class="ico ico-plein" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span class="lib-autres">Plus</span></button>
+</nav>
+
+<main id="contenu" tabindex="-1">
+
+  <section id="vue-apercu" class="vue actif" role="tabpanel" aria-labelledby="titre-apercu">
+    <h1 class="titre-vue" id="titre-apercu">Vue d’ensemble</h1>
+    <div class="grille-kpi kpi-apercu" id="kpis"></div>
+    <nav class="raccourcis" aria-label="Explorer la chaîne">
+      <span class="raccourcis-lib">Explorer la chaîne</span>
+      <button type="button" data-aller="reseau">Réseau</button>
+      <button type="button" data-aller="blocs">Blocs</button>
+      <button type="button" data-aller="noeud">Nœud</button>
+    </nav>
+    <section class="panneau">
+      <h2>La chaîne, bloc par bloc</h2>
+      <p class="note sous-titre">Chaque tuile est un bloc scellé : touchez-en une pour voir ce qu’il contient. La case pointillée attend le prochain bloc.</p>
+      <div class="ruban-cadre" id="ruban-cadre">
+        <button type="button" class="ruban-prec" id="ruban-prec" aria-label="Voir les blocs précédents" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="ruban" id="ruban-apercu" role="list" aria-label="Derniers blocs de la chaîne"></div>
+      </div>
+      <div class="legende-ruban" id="legende-apercu"></div>
+    </section>
     <div class="deux">
-      <div class="carte">
+      <section class="panneau">
         <h2>Comment circule une unité</h2>
         <ol class="circuit">
-          <li><b>Forfait d'essai</b> : des unités d'usage non cessibles, créditées par des factures d'essai ; aucune somme n'est encaissée.</li>
-          <li><b>Utilisation</b> : un service rendu par le réseau se règle par une dépense signée.</li>
-          <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve d'usage ; aucune part ne va à un autre compte.</li>
-          <li><b>Points de travail</b> : à chaque fin d'époque (mercredi 12:00 UTC), le budget de la semaine se répartit en points entre le travail rejoué par une autre machine (secondes de calcul, × 2 si le résultat est retrouvé à l'identique) et les vérifications signées. Le budget est fictif, non convertible et ne donne droit à aucun paiement ; pour l'instant, ce calcul reste une simulation.</li>
-          <li><b>Aucun transfert</b> entre comptes, aucune frappe : l'offre ne fait que décroître.</li>
+          <li><b>Forfait d’essai</b> : il crédite des unités d’usage non cessibles, prises sur la réserve « usage ». Pendant l’essai, rien n’est vendu ni encaissé.</li>
+          <li><b>Utilisation</b> : un service rendu par le réseau (une réponse d’un modèle, une lecture d’image) se règle par une dépense signée.</li>
+          <li><b>Dépense</b> : le portefeuille signe ; <span class="detruit">20 % sont détruits</span>, 80 % retournent à la réserve qui paie les époques.</li>
+          <li><b>Partage de puissance</b> : à chaque fin d’époque (mercredi 12:00 UTC<span id="p-heure-locale"></span>), le budget de la semaine est partagé au prorata des points : travail validé par un reçu indépendant (secondes de calcul × 2 si rejeu exact) et validations signées. Le budget est divisé par deux chaque année, sur 4 ans.</li>
+          <li><b>Aucun transfert</b> entre comptes, aucune frappe : l’offre ne fait que décroître.</li>
         </ol>
-      </div>
-      <div class="carte">
+      </section>
+      <section class="panneau">
         <h2>Derniers blocs</h2>
         <div id="apercu-blocs" class="liste-blocs"></div>
-      </div>
+      </section>
     </div>
   </section>
 
-  <section id="vue-portefeuille" class="vue">
-    <div class="carte solde-carte">
-      <div class="solde-libelle">Solde</div>
-      <div class="solde"><span id="solde">—</span> <small>VISION-essai</small></div>
-      <div class="adresse-ligne"><code id="adresse">—</code><button class="petit" id="copier">Copier</button></div>
-      <div class="actions">
-        <button class="primaire" id="btn-depenser">Dépenser</button>
-        <button id="btn-recevoir">Recevoir</button>
+  <section id="vue-portefeuille" class="vue" role="tabpanel" aria-labelledby="titre-portefeuille">
+    <h1 class="titre-vue" id="titre-portefeuille">Portefeuille</h1>
+    <div class="poche-grille">
+      <div class="colonne-carte">
+        <article class="specimen" aria-labelledby="lib-solde">
+          <div class="specimen-haut">
+            <span class="specimen-lib" id="lib-solde">Solde disponible</span>
+            <span class="tampon"><span>Spécimen</span><span>sans valeur</span></span>
+          </div>
+          <p class="solde"><span id="solde">—</span><span class="unite">unités VISION-essai</span></p>
+          <p class="specimen-mention">Unités d’essai sans valeur, rien en vente.</p>
+          <p class="specimen-provenance" id="p-provenance"></p>
+          <div class="souche">
+            <span class="souche-lib">Votre adresse <span class="souche-sous">(pour vous retrouver sur la chaîne)</span></span>
+            <code id="adresse" class="adresse">—</code>
+            <button type="button" class="copier" id="copier"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span class="copier-lib">Copier</span></button>
+            <span class="souche-aide">Le début et la fin sont repérés en couleur : comparez-les avant tout usage.</span>
+          </div>
+        </article>
+
+        <div class="actions-poche">
+          <button type="button" class="grand" id="btn-recevoir"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Recevoir</button>
+          <button type="button" class="grand primaire" id="btn-depenser"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>Dépenser</button>
+        </div>
+        <button type="button" class="forfait-essai" id="btn-acheter" disabled title="Forfaits d’essai fermés sur ce nœud : rien n’est en vente ni encaissé pendant l’essai."><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17M8 14.5h3"/></svg><span class="forfait-essai-texte"><span class="forfait-essai-titre">Forfait d’essai</span><span class="forfait-essai-note">crédite des unités d’usage, rien n’est encaissé</span></span></button>
+        <p class="note note-acheter" id="note-acheter" hidden></p>
+
+        <div id="formulaire" class="formulaire" hidden></div>
+        <div id="message" class="message" role="status" aria-live="polite" hidden></div>
       </div>
-      <div id="formulaire" class="formulaire" hidden></div>
-      <div id="message" class="message" hidden></div>
-    </div>
-    <div class="carte">
-      <h2>En attente d'un bloc</h2>
-      <div id="attente" class="vide">Rien en attente.</div>
-      <h2>Historique <a class="lien-csv" href="/api/historique.csv" download>Exporter en CSV</a></h2>
-      <div id="historique"></div>
-    </div>
-    <div class="carte">
-      <h2>Sauvegarde de la clé</h2>
-      <p class="note">Ce portefeuille tient dans une seule clé, gardée sur cette machine. Elle ne quitte jamais le nœud et personne ne peut la recréer : sans elle, le solde est perdu.</p>
-      <code id="fichier-cle" class="fichier-cle">—</code>
-      <ol class="circuit">
-        <li><b>Sauvegarder</b> : copiez ce fichier et son <code>.pub</code> sur un support chiffré.</li>
-        <li><b>Restaurer</b> : remettez les deux fichiers au même endroit, puis relancez le nœud. L'installateur ne remplace jamais une clé existante.</li>
-        <li><b>Vérifier</b> : l'adresse affichée en haut de cette page doit redevenir la vôtre.</li>
-      </ol>
+
+      <div class="colonne-fil">
+        <section class="panneau">
+          <h2>En attente d’un bloc</h2>
+          <div id="attente" class="vide defile">Rien en attente.</div>
+        </section>
+        <section class="panneau" id="panneau-historique" tabindex="-1">
+          <div class="tete-panneau"><h2>Historique</h2><a class="lien-csv" href="/api/historique.csv" download="historique-vision-essai.csv">Exporter en CSV</a></div>
+          <p class="note sous-titre">Chaque ligne est inscrite dans un bloc de la chaîne : elle ne peut plus être effacée.</p>
+          <div id="historique" class="defile releve"></div>
+        </section>
+      </div>
+
+      <section class="panneau panneau-cle" aria-labelledby="titre-cle">
+        <h2 id="titre-cle">Sauvegarder la clé du portefeuille</h2>
+        <p class="note">Ce portefeuille tient dans une seule clé, gardée sur cette machine. Elle ne quitte jamais le nœud et personne ne peut la recréer : sans elle, le solde est perdu.</p>
+        <p class="fichier-lib">Fichier de la clé sur cette machine</p>
+        <code id="fichier-cle" class="fichier-cle">—</code>
+        <ol class="circuit">
+          <li><b>Sauvegarder</b> : copiez ce fichier et son <code>.pub</code> sur un support chiffré.</li>
+          <li><b>Restaurer</b> : remettez les deux fichiers au même endroit, puis relancez le nœud. L’installateur ne remplace jamais une clé existante.</li>
+          <li><b>Vérifier</b> : l’adresse affichée sur la carte doit redevenir la vôtre.</li>
+        </ol>
+      </section>
     </div>
   </section>
 
-  <section id="vue-compte" class="vue">
-    <div class="carte">
-      <h2>Se connecter avec une adresse</h2>
-      <p class="note">Entrez le numéro d'un portefeuille (te1…) ou d'un nœud : tout ce que la chaîne sait de lui s'affiche, contrôlé bloc par bloc par ce nœud. La consultation est libre ; seule la clé gardée sur la machine peut signer une dépense.</p>
+  <section id="vue-compte" class="vue" role="tabpanel" aria-labelledby="titre-compte">
+    <h1 class="titre-vue" id="titre-compte">Mon compte</h1>
+    <section class="panneau">
+      <h2>Consulter une adresse</h2>
+      <p class="note">Entrez l’adresse d’un portefeuille ou d’un nœud : tout ce que la chaîne sait de lui s’affiche, contrôlé bloc par bloc par ce nœud. La consultation est libre ; seule la clé gardée sur la machine peut signer une dépense.</p>
       <form id="form-compte" class="ligne-adresse">
-        <input id="saisie-adresse" type="text" spellcheck="false" autocomplete="off" placeholder="te1… (40 caractères hexadécimaux)" maxlength="43">
-        <button class="primaire" type="submit">Se connecter</button>
-        <button type="button" id="btn-mon-adresse">Mon adresse</button>
+        <label class="champ-lib" for="saisie-adresse">Adresse (te1…)</label>
+        <input id="saisie-adresse" type="text" inputmode="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="te1 suivi de 40 caractères" maxlength="43" aria-describedby="aide-adresse">
+        <p class="aide" id="aide-adresse">Commence par te1, puis 40 caractères de 0 à 9 et de a à f.</p>
+        <div class="apercu-saisie" id="apercu-saisie" aria-hidden="true"></div>
+        <div class="actions">
+          <button class="primaire" type="submit">Se connecter</button>
+          <button type="button" id="btn-mon-adresse">Mon adresse</button>
+        </div>
       </form>
-      <div id="message-compte" class="message" hidden></div>
-    </div>
+      <div id="message-compte" class="message" role="status" aria-live="polite" hidden></div>
+    </section>
     <div id="compte" hidden>
-      <div class="grille-kpi" id="kpis-compte"></div>
+      <div class="grille-kpi kpi-compte" id="kpis-compte"></div>
       <div class="deux">
-        <div class="carte"><h2>Forfaits d'essai</h2><div id="compte-forfaits"></div></div>
-        <div class="carte"><h2>Nœuds et matériel partagé</h2><div id="compte-noeuds"></div></div>
+        <section class="panneau"><h2>Abonnement et forfaits</h2><div id="compte-forfaits" class="defile"></div></section>
+        <section class="panneau"><h2>Nœuds et matériel partagé</h2><div id="compte-noeuds" class="defile"></div></section>
       </div>
-      <div class="carte"><h2>Opérations sur la chaîne</h2><div id="compte-historique"></div></div>
+      <section class="panneau"><h2>Opérations sur la chaîne</h2><p class="note sous-titre">Chaque ligne est inscrite dans un bloc de la chaîne : elle ne peut plus être effacée.</p><div id="compte-historique" class="defile releve"></div></section>
     </div>
   </section>
 
-  <section id="vue-puissance" class="vue">
+  <section id="vue-puissance" class="vue" role="tabpanel" aria-labelledby="titre-puissance">
+    <h1 class="titre-vue" id="titre-puissance">Partage de puissance</h1>
+    <section class="panneau panneau-epoque">
+      <h2>Époque en cours <span id="epoque-badge" class="badge"></span></h2>
+      <div class="epoque-visuel" id="p-epoque" hidden>
+        <p class="epoque-cloture" id="p-epoque-cloture"></p>
+        <div class="frise" id="p-frise" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Avancement de l’époque">
+          <div class="frise-barre"><span class="frise-plein" id="p-frise-plein"></span><span class="frise-aiguille" id="p-frise-aiguille"></span></div>
+          <ol class="frise-jours" id="p-frise-jours" aria-hidden="true"></ol>
+        </div>
+        <div class="points" id="p-points-zone" hidden>
+          <h3 class="h3-points">Points vérifiés par nœud</h3>
+          <ul class="points-liste" id="p-points"></ul>
+        </div>
+      </div>
+      <div id="epoque" class="defile"></div>
+      <h2 class="h2-suite">Époques closes</h2>
+      <div id="epoques-closes" class="defile"></div>
+    </section>
     <div class="deux">
-      <div class="carte">
+      <section class="panneau">
         <h2>Cette machine</h2>
         <div id="gpus"></div>
         <p class="note" id="regle-puissance"></p>
-        <div class="actions"><button class="primaire" id="btn-inscrire">Inscrire ce nœud au registre</button></div>
-        <div id="message-inscription" class="message" hidden></div>
-      </div>
-      <div class="carte">
-        <h2>Unités reçues par le nœud <span id="solde-noeud" class="badge"></span></h2>
-        <div id="gains"></div>
-      </div>
+        <div class="actions"><button type="button" class="primaire" id="btn-inscrire">Inscrire ce nœud au registre</button></div>
+        <div id="message-inscription" class="message" role="status" aria-live="polite" hidden></div>
+      </section>
+      <section class="panneau">
+        <h2>Gains du nœud <span id="solde-noeud" class="badge"></span></h2>
+        <div id="gains" class="defile gains"></div>
+      </section>
     </div>
-    <div class="carte">
-      <h2>Époque en cours <span id="epoque-badge" class="badge"></span></h2>
-      <div id="epoque"></div>
-      <h2>Époques closes</h2>
-      <div id="epoques-closes"></div>
-    </div>
-    <div class="carte">
+    <section class="panneau">
       <h2>Nœuds du réseau</h2>
-      <div id="classement"></div>
-      <p class="note">Le partage de puissance passe par des missions orchestrées et revérifiées par d'autres machines : aucun pair ne peut faire exécuter quoi que ce soit sur une machine par le réseau.</p>
-    </div>
+      <div id="classement" class="defile"></div>
+      <p class="note">Le partage de puissance passe par des missions orchestrées et revérifiées par d’autres machines : aucun pair ne peut faire exécuter quoi que ce soit sur une machine par le réseau.</p>
+    </section>
   </section>
 
-  <section id="vue-reseau" class="vue">
-    <div class="grille-kpi" id="kpis-reseau"></div>
-    <div class="carte"><h2>Machines et nœuds <span id="reseau-badge" class="badge"></span></h2><div id="reseau-noeuds"></div>
-      <p class="note">Chaque nœud annonce lui-même sa machine (GPU, cœurs, mémoire, charge). Une machine qui porte deux nœuds ne compte qu'une fois dans la puissance cumulée. Un nœud n'est actif que s'il a répondu dans les deux dernières minutes, sur le même bloc 0.</p></div>
+  <section id="vue-reseau" class="vue" role="tabpanel" aria-labelledby="titre-reseau">
+    <h1 class="titre-vue" id="titre-reseau">Réseau</h1>
+    <div class="grille-kpi kpi-reseau" id="kpis-reseau"></div>
+    <section class="panneau">
+      <h2>Machines et nœuds <span id="reseau-badge" class="badge"></span></h2>
+      <div id="reseau-noeuds" class="defile"></div>
+      <p class="note">Chaque nœud annonce lui-même sa machine (GPU, cœurs, mémoire, charge). Une machine qui porte deux nœuds ne compte qu’une fois dans la puissance cumulée. Un nœud n’est actif que s’il a répondu dans les deux dernières minutes, sur le même bloc 0.</p>
+    </section>
   </section>
 
-  <section id="vue-blocs" class="vue">
-    <div class="carte">
+  <section id="vue-blocs" class="vue" role="tabpanel" aria-labelledby="titre-blocs">
+    <h1 class="titre-vue" id="titre-blocs">Blocs</h1>
+    <section class="panneau panneau-blocs">
       <h2>Explorateur de blocs <span id="blocs-compte" class="badge"></span></h2>
-      <div class="barre-outils">
-        <input id="filtre-blocs" type="search" spellcheck="false" autocomplete="off" placeholder="Filtrer par hauteur (#12), empreinte, type, compte, nœud ou détail…">
-      </div>
+      <p class="note">Touchez un bloc pour voir ses transactions. Les blocs ouverts le restent pendant les mises à jour.</p>
+      <label class="filtre-blocs" for="filtre-blocs"><span>Filtrer</span><input id="filtre-blocs" type="search" spellcheck="false" autocomplete="off" placeholder="Hauteur (#4), empreinte, type, compte, nœud…"></label>
       <div id="blocs"></div>
-    </div>
+    </section>
   </section>
 
-  <section id="vue-assistant" class="vue">
-    <div class="carte"><h2>Assistant</h2>
-      <p class="note">L'assistant lit l'état mesuré de ce nœud (chaîne, réseau, portefeuille) et répond à partir de ces chiffres seulement. Il n'a aucun outil : il ne lit aucun fichier et ne lance aucune commande. Son moteur est celui déclaré par le propriétaire du nœud (clé « assistant » du config.json).</p>
-      <textarea id="assistant-question" rows="3" maxlength="2000" placeholder="Ex. : où en est mon réseau ? quel est mon solde ?"></textarea>
-      <div class="actions">
-        <label class="petit"><input type="checkbox" id="assistant-payer"> Régler la question en unités d'essai (dépense signée, sans valeur)</label>
-        <button id="btn-assistant">Demander</button>
-      </div>
-      <div id="assistant-etat" class="note"></div>
-      <div id="assistant-reponse" class="assistant-reponse" hidden></div>
-    </div>
-  </section>
-
-  <section id="vue-noeud" class="vue">
+  <section id="vue-noeud" class="vue" role="tabpanel" aria-labelledby="titre-noeud">
+    <h1 class="titre-vue" id="titre-noeud">Nœud</h1>
     <div class="deux">
-      <div class="carte"><h2>Ce nœud</h2><dl id="infos-noeud" class="cv"></dl>
-        <div class="actions"><button id="btn-synchro">Synchroniser maintenant</button></div></div>
-      <div class="carte"><h2>Pairs</h2><div id="pairs"></div>
-        <p class="note">Les blocs se vérifient d'eux-mêmes (empreintes, Merkle, signature du producteur épinglée) : les nœuds se parlent en direct, sans réseau privé. Tailscale reste un repli.</p></div>
+      <section class="panneau"><h2>Ce nœud</h2><dl id="infos-noeud" class="cv"></dl>
+        <div class="actions"><button type="button" id="btn-synchro">Synchroniser maintenant</button></div></section>
+      <section class="panneau"><h2>Pairs</h2><div id="pairs" class="defile"></div>
+        <p class="note">Les blocs se vérifient d’eux-mêmes (empreintes, Merkle, signature du producteur épinglée) : les nœuds se parlent en direct, sans réseau privé. Tailscale reste un repli.</p></section>
     </div>
-    <div class="carte"><h2>Rejoindre le réseau</h2>
-      <div id="miroirs"></div>
-      <p class="note">Un nœud installé hors du réseau local lit la chaîne sur le miroir public et la rejoue en entier. Pour entrer au registre, il prépare une demande d'inscription signée par sa clé (données publiques seulement) et la dépose en ticket sur le dépôt ; le producteur l'importe au prochain passage.</p>
-      <div class="actions"><button id="btn-demande">Préparer ma demande d'inscription</button></div>
+    <section class="panneau"><h2>Rejoindre le réseau</h2>
+      <div id="miroirs" class="defile"></div>
+      <p class="note">Un nœud installé hors du réseau local lit la chaîne sur le miroir public et la rejoue en entier. Pour entrer au registre, il prépare une demande d’inscription signée par sa clé (données publiques seulement) et la dépose en ticket sur le dépôt ; le producteur l’importe au prochain passage.</p>
+      <div class="actions"><button type="button" id="btn-demande">Préparer ma demande d’inscription</button></div>
       <div id="demande" hidden></div>
-    </div>
-    <div class="carte"><h2>Journal du nœud</h2><pre id="journal" class="journal"></pre></div>
+    </section>
+    <section class="panneau"><h2>Journal du nœud</h2><pre id="journal" class="journal" tabindex="0"></pre></section>
+  </section>
+
+  <section id="vue-assistant" class="vue" role="tabpanel" aria-labelledby="titre-assistant">
+    <h1 class="titre-vue" id="titre-assistant">Assistant</h1>
+    <section class="panneau panneau-assistant"><h2>Poser une question à ce nœud</h2>
+      <p class="note">L’assistant lit l’état mesuré de ce nœud (chaîne, réseau, portefeuille) et répond à partir de ces chiffres seulement. Il n’a aucun outil : il ne lit aucun fichier et ne lance aucune commande. Son moteur est celui déclaré par le propriétaire du nœud (clé « assistant » du config.json). Il faut ouvrir le portefeuille par son icône (passe local) pour l’interroger.</p>
+      <label class="lib-champ" for="assistant-question">Votre question</label>
+      <textarea id="assistant-question" rows="3" maxlength="2000" placeholder="Ex. : où en est mon réseau ? quel est mon solde ?"></textarea>
+      <div class="actions actions-assistant">
+        <label class="case"><input type="checkbox" id="assistant-payer"> Régler la question en unités d’essai (dépense signée, sans valeur)</label>
+        <button type="button" class="primaire" id="btn-assistant">Demander</button>
+      </div>
+      <div id="assistant-etat" class="note" role="status" aria-live="polite"></div>
+      <div id="assistant-reponse" class="assistant-reponse" hidden></div>
+    </section>
   </section>
 </main>
 
-<footer class="etat">
-  <span><span class="pastille" id="pastille-synchro"></span><span id="etat-synchro">connexion…</span></span>
-  <span id="etat-hauteur"></span>
+<footer class="etat" aria-label="État du nœud">
+  <span class="etat-synchro"><span class="pastille" id="pastille-synchro"></span><span id="etat-synchro">connexion…</span></span>
+  <span id="etat-hauteur" class="chiffres"></span>
   <span id="etat-pairs"></span>
   <span id="etat-role"></span>
   <span id="etat-version"></span>
-  <span class="droite">VISION-essai, sans valeur</span>
+  <span class="etat-essai">Réseau d’essai VISION — unités d’essai sans valeur, rien en vente</span>
+  <button type="button" class="theme" id="btn-theme">Thème : automatique</button>
 </footer>
 </body>
 </html>

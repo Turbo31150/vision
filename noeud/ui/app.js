@@ -308,7 +308,9 @@
   }));
   $('btn-depenser').addEventListener('click', formulaireDepense);
   $('btn-recevoir').addEventListener('click', recevoir);
-  $('copier').addEventListener('click', (ev) => copierTexte(ev.currentTarget, $('adresse').textContent));
+  // Portefeuille v2 : le retour visuel de la copie (libellé, repli par sélection) appartient à presentation.js ;
+  // copierTexte() réécrirait textContent et effacerait l'icône et le span .copier-lib du bouton.
+  $('copier').addEventListener('click', () => navigator.clipboard?.writeText($('adresse').textContent).catch(() => {}));
   $('btn-rafraichir')?.addEventListener('click', () => rafraichir());
   $('filtre-blocs')?.addEventListener('input', () => rendreBlocs());
   $('btn-inscrire').addEventListener('click', async () => {
