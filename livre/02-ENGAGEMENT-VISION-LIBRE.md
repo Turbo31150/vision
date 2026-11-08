@@ -34,8 +34,3 @@ Au 05/11/2026, l'engagement n'est **pas encore vrai**. Le réseau d'essai initia
 - [ ] **Dépôt et nom de domaine** transférés à une structure à gouvernance partagée, ou rendus forkables sans permission.
 - [ ] **Mémoire exportée en lecture seule** : les moissons et la mémoire du fondateur sont publiées comme des données, sans droit d'écriture sur la chaîne.
 - [ ] **Annonce publique datée** de l'abandon de pouvoir, signée, avec la liste ci-dessus cochée et ses preuves.
-
-## 4. Point pour l'avocat (dossier MiCA)
-- Si l'absence d'émetteur ou de prestataire identifiable devient réelle, elle peut compter dans la qualification au regard du règlement (UE) 2023/1114 (MiCA). Le considérant consacré aux services fournis « de manière entièrement décentralisée » est **absent de notre corpus local** : à faire lire et trancher par l'avocat.
-- **Tension à trancher** : une vente par une boutique commerciale identifiée désigne un offrant identifiable, même si le réseau est libre.
-- Tant que les cases du § 3 ne sont pas cochées, aucune communication ne doit présenter VISION comme décentralisé.
