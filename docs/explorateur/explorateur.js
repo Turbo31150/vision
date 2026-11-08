@@ -32,9 +32,20 @@
       el('tbody', {}, lignes.map((l) => el('tr', {}, colonnes.map((c) => { const v = c[1](l); return el('td', { class: c[2] || '' }, v); }))))));
   }
 
+  // Un libellé de facture d'essai se termine par un identifiant de machine.
+  // Publier ce suffixe, c'est publier à quelle machine de qui appartient le portefeuille.
+  // On n'ôte rien à la chaîne — les blocs sont signés et restent intacts — on cesse seulement
+  // d'afficher le suffixe : la date reste, l'identité part. Posé le 08/11/2026 (tâche #2294).
+  function factureSansMachine(f) {
+    if (!f) return '';
+    const m = String(f).match(/^(ESSAI-\d{8})-.+$/);
+    return m ? `${m[1]}-…` : f;
+  }
+
   function detailTx(t) {
     return t.service || (t.type === 'forfait' ? `forfait ${t.offre}` : '') || t.motif || (t.mission ? `${t.mission} / ${t.etape}` : '')
-      || (t.type === 'epoque' ? `époque ${t.numero}` : '') || (t.type === 'inscription' ? `nœud ${t.noeud}` : '') || t.facture || '';
+      || (t.type === 'epoque' ? `époque ${t.numero}` : '') || (t.type === 'inscription' ? `nœud ${t.noeud}` : '')
+      || factureSansMachine(t.facture) || '';
   }
 
   function puces(b) {

@@ -228,3 +228,10 @@ Exceptions :
 - les deux récits de `livre/`, [`00-LE-CODE-DE-PAPA.txt`](livre/00-LE-CODE-DE-PAPA.txt) et [`01-OMBRE-ET-LUMIERE.txt`](livre/01-OMBRE-ET-LUMIERE.txt), ne sont pas sous licence MIT : tous droits réservés.
 
 La licence porte sur le logiciel. Elle ne donne aucune valeur aux unités du réseau d'essai, qui restent sans valeur et non vendues.
+
+## Mentions légales et statut
+
+[`NOTICE.md`](NOTICE.md) dit ce qu'est ce dépôt et ce qu'il n'est pas : un prototype de recherche
+personnelle, aucune offre, aucune vente ouverte, aucune conformité réglementaire établie, aucune
+donnée d'utilisateur collectée. À lire avant de tirer une conclusion d'un chiffre ou d'un document
+de travail trouvé ici.
