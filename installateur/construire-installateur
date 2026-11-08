@@ -16,7 +16,14 @@ B0=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['bloc0'])" 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 mkdir "$T/archive"
 cp "$RACINE/noeud/vision-noeud" "$RACINE/noeud/ouvrir-portefeuille" "$RACINE/noeud/icone.ico" "$RACINE/chaine/vision-chaine" "$T/archive/"
-cp -r "$RACINE/noeud/ui" "$T/archive/ui"
+# seulement les fichiers suivis par git : les sauvegardes locales ignorées (*.avant-*, *.mis-de-cote-*) ne doivent
+# jamais partir dans l'archive publiée, et deux constructions du même commit doivent donner les mêmes empreintes
+mkdir "$T/archive/ui"
+if git -C "$RACINE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git -C "$RACINE" ls-files -z -- noeud/ui | while IFS= read -r -d '' f; do cp "$RACINE/$f" "$T/archive/ui/"; done
+else
+  find "$RACINE/noeud/ui" -maxdepth 1 -type f ! -name '*.avant-*' ! -name '*.mis-de-cote-*' -exec cp {} "$T/archive/ui/" \;
+fi
 # date fixe = celle du bloc de tête : deux constructions du même état donnent les mêmes fichiers
 DATE=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['genere_le'][:10])" "$INFO")
 tar -C "$T/archive" --sort=name --mtime="$DATE 00:00Z" --owner=0 --group=0 --numeric-owner -c . | gzip -n | base64 -w 76 > "$T/charge.b64"
