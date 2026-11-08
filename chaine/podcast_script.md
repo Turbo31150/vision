@@ -1,3 +1,5 @@
+> **OBSOLÈTE (08/11/2026)** : ce script du 03/11 contient deux chiffres faux (« 4 nœuds actifs » : 2 mesurés ; « 17 bases validées » : 15 mesurées) et présente des vérifications comme faites sans mesure. Il est conservé pour l'historique. Version sur mesures : [`podcast_script_corrige.md`](./podcast_script_corrige.md).
+
 # Script Podcast Alterné Double-Voix — Projet VISION
 # Voix 1 (Présentateur principal) : Introduction et présentation globale du projet VISION (turbo31150/vision)
 # Voix 2 (Contrôleur et vérificateur) : Vérification en temps réel des valeurs, métriques, architecture et correction des écarts avant validation de chaque segment.

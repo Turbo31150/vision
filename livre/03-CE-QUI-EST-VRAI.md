@@ -24,7 +24,7 @@ Annexe du 05/11/2026. Le récit est une fiction. Cette page sépare ce qui est m
 
 ## La mémoire et l'historique (déjà rédigés et sourcés)
 - Chronologie complète, du master prompt Symbiose (2025) et de SYMBIOSE (26/09/2025) jusqu'au canon (15/10/2026) et à la GRAINE (21-22/10/2026), avec les dépôts GitHub et leurs commits : `10-genesis-01_ORIGIN_AND_LINEAGE.md` (corpus interne Turbo OS). Le domaine du Board origines de Turbo OS est vectorisé.
-- Audit Genesis, époque 001 (20 livrables) : `/mnt/nvme-data/vision/audits/genesis_epoch_001/`.
+- Audit Genesis, époque 001 (20 livrables) : dossier local `genesis_epoch_001/` (non publié).
 
 ## « VISION libre, aucun pouvoir du fondateur »
 Voir `02-ENGAGEMENT-VISION-LIBRE.md`. L'engagement est posé, mais il n'est pas encore vrai : il y a un producteur unique (M0), seulement des témoins internes, et les règles sont modifiables par le fondateur. La liste des conditions à remplir avant le lancement y figure.
