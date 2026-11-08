@@ -5,10 +5,10 @@ Sorties dans DOSSIER (par défaut docs/chaine du dépôt) :
   info.json   réseau, empreinte du bloc 0, hauteur, tête, clé publique d'origine du producteur
   bloc0.json  bloc 0 tel quel (son empreinte le scelle)
   blocs.json  tous les blocs, signatures comprises : un nœud les rejoue et les vérifie lui-même
-  etat.json   soldes, nœuds inscrits, puissance partagée (matériel seulement, sans adresse réseau ni nom de machine),
-              époque en cours et époques closes, pour l'explorateur
+  etat.json   soldes, nœuds inscrits, puissance partagée en TOTAL AGRÉGÉ seulement (tâche #2295 : le matériel nœud
+              par nœud — modèle de carte, mémoire, cœurs — n'est plus publié), époque en cours et époques closes
 
-Ne contient ni clé privée, ni adresse IP, ni chemin de fichier : un contrôle final refuse l'écriture sinon.
+Ne contient ni clé privée, ni adresse IP, ni chemin de fichier, ni matériel par nœud : un contrôle final refuse l'écriture sinon.
   exporter-chaine-publique [--config ~/.local/share/vision-noeud/config.json] [--api 127.0.0.1:8861] [DOSSIER]
 """
 import argparse
@@ -25,6 +25,24 @@ from pathlib import Path
 # motifs écrits avec des classes de caractères pour que ce fichier ne se signale pas lui-même au contrôle du dépôt
 INTERDIT = re.compile(r"PRIVATE KE[Y]|/hom[e]/|/mn[t]/|/roo[t]/|\b(10|127|19[2]\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+(\.\d+)?\b"
                       r"|gh[p]_|github_pa[t]_|s[k]-[A-Za-z0-9]{8}|AKI[A][0-9A-Z]{12}")
+# tâche #2295 : un nœud publié ne porte que ces champs ; le matériel n'existe qu'en total agrégé (reseau.total)
+CHAMPS_NOEUD = ("nom", "role", "actif", "hauteur")
+MATERIEL = re.compile(r"vram_m[o]|\bram_m[o]\b|\"gpu[s]\"\s*:\s*\[|GeForc[e]|Quadr[o]|Radeo[n]|\bRT[X]\b|\bGT[X]\b|\bArc A\d", re.I)
+
+
+def noeuds_publics(reseau):
+    """Nœuds du miroir public : identité et état seulement, aucune capacité matérielle."""
+    return [{k: n.get(k) for k in CHAMPS_NOEUD} for n in reseau.get("noeuds", [])]
+
+
+def controle_agrege(etat, texte):
+    """None si etat.json ne publie le matériel qu'en total ; sinon la raison du refus."""
+    for n in etat.get("reseau", {}).get("noeuds", []):
+        en_trop = sorted(set(n) - set(CHAMPS_NOEUD))
+        if en_trop:
+            return f"nœud {n.get('nom')!r} : champ(s) {', '.join(en_trop)} interdit(s) (matériel par nœud)"
+    m = MATERIEL.search(texte)
+    return f"matériel nominatif « {m.group(0)} »" if m else None
 
 
 def charger_chaine(cfg):
@@ -64,12 +82,7 @@ def main():
     reseau = api(a.api, "/api/reseau")
     epoque = api(a.api, "/api/epoque")
     maintenant = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    noeuds_reseau = []
-    for n in reseau["noeuds"]:
-        c = n.get("capacite") or {}
-        noeuds_reseau.append({"nom": n.get("nom"), "role": n.get("role"), "actif": n.get("actif"), "hauteur": n.get("hauteur"),
-                              "materiel": {"gpus": [{"nom": g["nom"], "vram_mo": g["vram_mo"]} for g in c.get("gpus", [])],
-                                           "cpu_coeurs": c.get("cpu_coeurs"), "ram_mo": c.get("ram_mo")} if c else None})
+    noeuds_reseau = noeuds_publics(reseau)
     inscrits = [{"noeud": tx["noeud"], "adresse": tx["adresse"], "portefeuille": tx.get("portefeuille"), "hauteur": b["hauteur"],
                  "horodatage": tx.get("horodatage")}
                 for b in blocs for tx in b["transactions"] if tx.get("type") == "inscription"]
@@ -90,6 +103,9 @@ def main():
         m = INTERDIT.search(texte)
         if m:
             sys.exit(f"REFUS : {nom} contient « {m.group(0)} » (secret, chemin ou adresse privée) : rien n'est écrit")
+    raison = controle_agrege(etat, sorties["etat.json"])
+    if raison:
+        sys.exit(f"REFUS : etat.json publie {raison} : rien n'est écrit")
     d = Path(a.dossier)
     d.mkdir(parents=True, exist_ok=True)
     for nom, texte in sorties.items():

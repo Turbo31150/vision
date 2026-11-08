@@ -22,7 +22,7 @@
       const l = el('tr');
       l.append(el('td', null, n.noeud));
       const td = el('td'); td.append(el('span', `etat ${r.actif ? 'actif' : 'hors'}`, r.actif ? 'en ligne' : 'hors ligne')); l.append(td);
-      l.append(el('td', null, m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(', ') || 'sans carte graphique'} ; ${m.cpu_coeurs} cœurs ; ${go(m.ram_mo)} de mémoire` : 'aucune annonce reçue'));
+      l.append(el('td', null, m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(', ') || 'sans carte graphique'} ; ${m.cpu_coeurs} cœurs ; ${go(m.ram_mo)} de mémoire` : 'publié en total seulement'));
       l.append(el('td', 'num c-sarcelle', fr.format(e.soldes[`noeud:${n.noeud}`] || 0)));
       tb.append(l);
     }

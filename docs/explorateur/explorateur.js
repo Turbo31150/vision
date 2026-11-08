@@ -22,7 +22,7 @@
   const court = (h, n = 12) => (h ? `${h.slice(0, n)}…` : '—');
   const heure = (iso) => { try { return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return iso || ''; } };
   const go = (mo) => `${Math.round((mo || 0) / 1024)} Go`;
-  const materiel = (m) => (m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(', ') || 'sans carte graphique'} ; ${m.cpu_coeurs} cœurs ; ${go(m.ram_mo)}` : 'aucune annonce reçue');
+  const materiel = (m) => (m ? `${m.gpus.map((g) => `${g.nom.replace('NVIDIA GeForce ', '')} ${go(g.vram_mo)}`).join(', ') || 'sans carte graphique'} ; ${m.cpu_coeurs} cœurs ; ${go(m.ram_mo)}` : 'publié en total seulement');  // #2295 : le miroir ne publie plus le matériel par nœud
   const chiffre = (lib, val, cls) => el('li', {}, el('b', { class: cls || '' }, String(val)), el('span', {}, lib));
   const couleurType = (t) => window.VisionRuban.GROUPES[window.VisionRuban.groupeDe(t)].couleur;
 

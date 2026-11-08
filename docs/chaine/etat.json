@@ -32,48 +32,19 @@
     "nom": "m0",
     "role": "pair",
     "actif": true,
-    "hauteur": 4,
-    "materiel": {
-     "gpus": [
-      {
-       "nom": "NVIDIA GeForce RTX 2060",
-       "vram_mo": 12288
-      },
-      {
-       "nom": "NVIDIA GeForce RTX 3080",
-       "vram_mo": 10240
-      }
-     ],
-     "cpu_coeurs": 16,
-     "ram_mo": 48089
-    }
+    "hauteur": 4
    },
    {
     "nom": "m6",
     "role": "pair",
     "actif": true,
-    "hauteur": 4,
-    "materiel": {
-     "gpus": [
-      {
-       "nom": "NVIDIA GeForce GTX 1660 SUPER",
-       "vram_mo": 6144
-      },
-      {
-       "nom": "Quadro RTX 4000",
-       "vram_mo": 8192
-      }
-     ],
-     "cpu_coeurs": 4,
-     "ram_mo": 32051
-    }
+    "hauteur": 4
    },
    {
     "nom": null,
     "role": null,
     "actif": false,
-    "hauteur": null,
-    "materiel": null
+    "hauteur": null
    }
   ]
  },
